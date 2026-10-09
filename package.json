@@ -1,0 +1,296 @@
+{
+  "name": "workspace-agent-hub",
+  "displayName": "Workspace Agent Hub",
+  "description": "One overview for Claude Code sessions across multiple isolated workspaces. Each agent only ever sees its own root.",
+  "version": "0.1.0",
+  "publisher": "dynamicspro",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/aschwarzdynpro/workspace-agent-hub"
+  },
+  "engines": {
+    "vscode": "^1.105.0"
+  },
+  "categories": [
+    "AI",
+    "Other"
+  ],
+  "keywords": [
+    "claude",
+    "claude code",
+    "agents",
+    "multi-root",
+    "workspaces"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "agentHub",
+          "title": "Workspace Agent Hub",
+          "icon": "resources/hub.svg"
+        }
+      ]
+    },
+    "views": {
+      "agentHub": [
+        {
+          "id": "agentHub.workspaces",
+          "name": "Workspaces",
+          "icon": "resources/hub.svg",
+          "contextualTitle": "Workspace Agent Hub"
+        },
+        {
+          "id": "agentHub.connection",
+          "name": "Connection",
+          "icon": "resources/hub.svg",
+          "visibility": "collapsed"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "agentHub.workspaces",
+        "contents": "No workspace roots configured yet.\n\nRoots are taken from the open multi-root workspace plus `agentHub.roots` in settings.\n\n[Add Root](command:agentHub.addRoot)\n[Install Claude Code Hooks](command:agentHub.installHooks)"
+      }
+    ],
+    "commands": [
+      {
+        "command": "agentHub.newSession",
+        "title": "New Claude Session",
+        "category": "Agent Hub",
+        "icon": "$(add)"
+      },
+      {
+        "command": "agentHub.resumeSession",
+        "title": "Resume Session",
+        "category": "Agent Hub",
+        "icon": "$(history)"
+      },
+      {
+        "command": "agentHub.focusSession",
+        "title": "Open Session Terminal",
+        "category": "Agent Hub",
+        "icon": "$(terminal)"
+      },
+      {
+        "command": "agentHub.openTranscript",
+        "title": "Open Transcript (JSONL)",
+        "category": "Agent Hub",
+        "icon": "$(file-text)"
+      },
+      {
+        "command": "agentHub.refresh",
+        "title": "Refresh",
+        "category": "Agent Hub",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "agentHub.showOverview",
+        "title": "Show Overview",
+        "category": "Agent Hub",
+        "icon": "$(dashboard)"
+      },
+      {
+        "command": "agentHub.installHooks",
+        "title": "Install Claude Code Hooks",
+        "category": "Agent Hub",
+        "icon": "$(plug)"
+      },
+      {
+        "command": "agentHub.addRoot",
+        "title": "Add Workspace Root",
+        "category": "Agent Hub",
+        "icon": "$(folder-opened)"
+      },
+      {
+        "command": "agentHub.revealRoot",
+        "title": "Reveal Root in Explorer",
+        "category": "Agent Hub",
+        "icon": "$(folder)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "agentHub.newSession",
+          "when": "view == agentHub.workspaces",
+          "group": "navigation@1"
+        },
+        {
+          "command": "agentHub.showOverview",
+          "when": "view == agentHub.workspaces",
+          "group": "navigation@2"
+        },
+        {
+          "command": "agentHub.refresh",
+          "when": "view == agentHub.workspaces",
+          "group": "navigation@3"
+        },
+        {
+          "command": "agentHub.installHooks",
+          "when": "view == agentHub.workspaces",
+          "group": "1_setup"
+        },
+        {
+          "command": "agentHub.addRoot",
+          "when": "view == agentHub.workspaces",
+          "group": "1_setup"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "agentHub.newSession",
+          "when": "view == agentHub.workspaces && viewItem == root",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentHub.resumeSession",
+          "when": "view == agentHub.workspaces && viewItem == root",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentHub.revealRoot",
+          "when": "view == agentHub.workspaces && viewItem == root",
+          "group": "2_nav"
+        },
+        {
+          "command": "agentHub.focusSession",
+          "when": "view == agentHub.workspaces && viewItem =~ /^session/",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentHub.resumeSession",
+          "when": "view == agentHub.workspaces && viewItem == session-ended",
+          "group": "inline@2"
+        },
+        {
+          "command": "agentHub.openTranscript",
+          "when": "view == agentHub.workspaces && viewItem =~ /^session/",
+          "group": "2_nav"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "agentHub.focusSession",
+          "when": "false"
+        },
+        {
+          "command": "agentHub.openTranscript",
+          "when": "false"
+        },
+        {
+          "command": "agentHub.revealRoot",
+          "when": "false"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "Workspace Agent Hub",
+      "properties": {
+        "agentHub.roots": {
+          "type": "array",
+          "default": [],
+          "markdownDescription": "Additional workspace roots that are not part of the open VS Code workspace. Each root is an isolated Claude Code working directory.",
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "path"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Display name"
+              },
+              "path": {
+                "type": "string",
+                "description": "Absolute path. `~` is expanded."
+              },
+              "kind": {
+                "type": "string",
+                "enum": [
+                  "repo",
+                  "coordinator"
+                ],
+                "default": "repo",
+                "description": "`coordinator` roots hold no code; they only read the hub status spool."
+              }
+            }
+          }
+        },
+        "agentHub.includeWorkspaceFolders": {
+          "type": "boolean",
+          "default": true,
+          "description": "Treat every folder of the open (multi-root) workspace as a root."
+        },
+        "agentHub.launchMode": {
+          "type": "string",
+          "enum": [
+            "terminal",
+            "chat"
+          ],
+          "enumDescriptions": [
+            "Spawn `claude` in an integrated terminal whose cwd is the root (default, fully supported).",
+            "Open the Anthropic Claude Code chat panel for the root (requires `agentHub.chatCommandId`)."
+          ],
+          "default": "terminal",
+          "description": "How new sessions are started."
+        },
+        "agentHub.claudeCommand": {
+          "type": "string",
+          "default": "claude",
+          "description": "Executable used to start Claude Code in a terminal."
+        },
+        "agentHub.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Extra CLI arguments appended to every `claude` invocation (e.g. `--model`, `--permission-mode`)."
+        },
+        "agentHub.chatCommandId": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Command id of the Anthropic Claude Code extension used to open a chat session. Leave empty until verified from that extension's `package.json` (see `SPEC.md`)."
+        },
+        "agentHub.spoolPath": {
+          "type": "string",
+          "default": "~/.claude/hub/events.ndjson",
+          "description": "NDJSON file the Claude Code hooks append to. The hub tails this file."
+        },
+        "agentHub.claudeHome": {
+          "type": "string",
+          "default": "~/.claude",
+          "description": "Claude Code home directory (contains `projects/` and `settings.json`)."
+        },
+        "agentHub.staleAfterMinutes": {
+          "type": "number",
+          "default": 30,
+          "description": "A session without events for this long is shown as idle."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "typecheck": "tsc --noEmit",
+    "lint": "tsc --noEmit",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.105.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.6.0"
+  }
+}
