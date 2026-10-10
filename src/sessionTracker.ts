@@ -38,6 +38,8 @@ export class SessionTracker implements vscode.Disposable {
   private skipFirstLine = false;
   /** Sessions whose transcript title was already looked up (avoid re-reading on every event). */
   private readonly titleTried = new Set<string>();
+  /** Hub terminals that were closed: late events from them must not revive their session. */
+  private readonly closedTerminals = new Set<string>();
   private watcher?: fs.FSWatcher;
   private poll?: NodeJS.Timeout;
   private roots: Root[] = [];
@@ -75,7 +77,8 @@ export class SessionTracker implements vscode.Disposable {
       size = 0;
     }
     this.offset = Math.max(0, size - REPLAY_TAIL_BYTES);
-    this.skipFirstLine = this.offset > 0;
+    // Discard the first line only if the cut lands mid-line.
+    this.skipFirstLine = this.offset > 0 && !this.byteBeforeOffsetIsNewline();
     this.readNew(); // replay history so restarts keep state
     this.prune();
     this.fire();
@@ -137,6 +140,8 @@ export class SessionTracker implements vscode.Disposable {
 
   /** A hub terminal was closed: its session cannot be running any more. */
   terminalClosed(terminalId: string): void {
+    this.readNew(); // apply events already in the spool first, so they cannot override "ended"
+    this.closedTerminals.add(terminalId);
     this.pendingTerminals.delete(terminalId);
     let changed = false;
     for (const s of this.sessions.values()) {
@@ -283,8 +288,25 @@ export class SessionTracker implements vscode.Disposable {
       default:
         break;
     }
+    // A hook that outlives its closed terminal (or an event read late) keeps the session ended.
+    if (ev.terminal && this.closedTerminals.has(ev.terminal)) s.status = "ended";
     this.loadTitle(s);
     return true;
+  }
+
+  private byteBeforeOffsetIsNewline(): boolean {
+    try {
+      const fd = fs.openSync(this.spool, "r");
+      try {
+        const b = Buffer.alloc(1);
+        fs.readSync(fd, b, 0, 1, this.offset - 1);
+        return b[0] === 0x0a;
+      } finally {
+        fs.closeSync(fd);
+      }
+    } catch {
+      return false;
+    }
   }
 
   private loadTitle(s: Session): void {

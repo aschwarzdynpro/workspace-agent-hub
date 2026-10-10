@@ -70,8 +70,10 @@ export function hooksInstalled(context: vscode.ExtensionContext): boolean {
   const settingsPath = path.join(getConfig().claudeHome, "settings.json");
   try {
     const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as { hooks?: HooksMap };
-    const command = hookCommand(context);
-    return EVENTS.every((ev) => settings.hooks?.[ev]?.some((g) => g.hooks?.some((h) => h.command === command)) ?? false);
+    // Also accept the JSON-escaped form older builds wrote (differs only on Windows); it still works.
+    const script = path.join(context.extensionPath, "hooks", MARKER);
+    const accepted = new Set([hookCommand(context), `node ${JSON.stringify(script)}`]);
+    return EVENTS.every((ev) => settings.hooks?.[ev]?.some((g) => g.hooks?.some((h) => accepted.has(h.command))) ?? false);
   } catch {
     return false;
   }
