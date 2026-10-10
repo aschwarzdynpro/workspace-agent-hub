@@ -1,3 +1,4 @@
+import * as path from "path";
 import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
 import { addRootToSettings, getConfig, normalizePath } from "./config";
@@ -202,22 +203,42 @@ export function activate(context: vscode.ExtensionContext): void {
       connection.refresh();
     }),
 
+    // The pickers follow a native folder dialog; without ignoreFocusOut they vanish on the
+    // first click elsewhere and the command ends silently, so every exit is reported.
     vscode.commands.registerCommand("agentHub.addRoot", async () => {
       const picked = await vscode.window.showOpenDialog({ canSelectFolders: true, canSelectFiles: false, canSelectMany: false, title: "Add workspace root" });
       const folder = picked?.[0];
       if (!folder) return;
+      const existing = tree.getRoots().find((r) => r.id === normalizePath(folder.fsPath));
+      if (existing) {
+        void vscode.window.showInformationMessage(`Agent Hub: ${folder.fsPath} is already a root ("${existing.name}").`);
+        return;
+      }
       const kind = await vscode.window.showQuickPick(
         [
           { label: "Repository", description: "Normal root with code", value: "repo" as const },
           { label: "Coordinator", description: "No code; only reads the hub status", value: "coordinator" as const },
         ],
-        { placeHolder: "Kind of root" }
+        { title: `Add root: ${folder.fsPath}`, placeHolder: "Kind of root", ignoreFocusOut: true }
       );
-      if (!kind) return;
-      const name = await vscode.window.showInputBox({ prompt: "Display name", value: folder.path.split("/").pop() ?? "root" });
-      if (!name) return;
-      await addRootToSettings({ name, path: folder.fsPath, kind: kind.value });
-      tree.reload();
+      if (!kind) return void vscode.window.setStatusBarMessage("Agent Hub: adding the root was cancelled", 4000);
+      const name = await vscode.window.showInputBox({
+        title: `Add root: ${folder.fsPath}`,
+        prompt: "Display name",
+        value: path.basename(folder.fsPath) || "root",
+        ignoreFocusOut: true,
+      });
+      if (!name) return void vscode.window.setStatusBarMessage("Agent Hub: adding the root was cancelled", 4000);
+      try {
+        const result = await addRootToSettings({ name, path: folder.fsPath, kind: kind.value });
+        tree.reload();
+        log.appendLine(`addRoot ${folder.fsPath}: ${result}`);
+        if (result === "exists") void vscode.window.showInformationMessage(`Agent Hub: ${folder.fsPath} is already a root.`);
+        else void vscode.window.showInformationMessage(`Agent Hub: added root "${name}".`);
+      } catch (err) {
+        log.appendLine(`addRoot ${folder.fsPath} failed: ${err instanceof Error ? err.message : String(err)}`);
+        void vscode.window.showErrorMessage(`Agent Hub: could not save the root to settings — ${err instanceof Error ? err.message : String(err)}`);
+      }
     }),
 
     // One window instead of one per customer: every root becomes a folder of this window,
