@@ -75,7 +75,13 @@ Session, wenn eine wartet, sonst Overview.
 
 Beim Start werden nur die letzten 8 MB des Spools nachgespielt.
 
-Sortierung in Tree und Overview: waiting → working → done → idle.
+Sortierung in Tree und Overview: Roots nach ihrer dringendsten Session (waiting → working → done →
+idle → keine), bei Gleichstand nach Name; Sessions innerhalb eines Roots ebenso, neueste zuerst.
+Session-Zeilen im Tree beginnen mit dem kurzen Status („waiting 3m · <Titel>“,
+„working · Edit · <Titel>“, „done 9m · <Titel>“): VS Code kürzt eine Zeile hinten, so bleibt der Status
+auch in einer schmalen Sidebar sichtbar. Voller Titel im Tooltip. Resume-Einträge: „1d · <Titel>“.
+`PostToolUse` löscht das aktuelle Tool; eine Permission-Frage zwischen Pre- und PostToolUse zeigt also
+das Tool, um das es geht. Pfade im Overview: `~` für Home, lange Pfade als `…/<eltern>/<root>`.
 
 ## Ein Fenster
 

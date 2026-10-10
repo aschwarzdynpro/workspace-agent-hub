@@ -1,9 +1,11 @@
+import * as os from "os";
 import * as vscode from "vscode";
+import { displayPath } from "./format";
 import { SessionTracker } from "./sessionTracker";
 import { Root, Session } from "./types";
 
 interface OverviewState {
-  roots: (Root & { sessions: Session[] })[];
+  roots: (Root & { displayPath: string; sessions: Session[] })[];
   counts: Record<string, number>;
   generatedAt: number;
 }
@@ -54,7 +56,11 @@ export class OverviewPanel {
 
   private update(): void {
     const state: OverviewState = {
-      roots: this.roots().map((r) => ({ ...r, sessions: this.tracker.forRoot(r.id).filter((s) => s.status !== "ended") })),
+      roots: this.tracker.sortByAttention(this.roots()).map((r) => ({
+        ...r,
+        displayPath: displayPath(r.path, os.homedir()),
+        sessions: this.tracker.forRoot(r.id).filter((s) => s.status !== "ended"),
+      })),
       counts: this.tracker.counts(),
       generatedAt: Date.now(),
     };

@@ -38,7 +38,9 @@
       el("span", "name", root.name),
       el("span", "chip" + (waiting ? " wait" : ""), waiting ? "waiting for you" : top ? top.status : "idle")
     );
-    d.append(head, el("div", "path", root.kind === "coordinator" ? "coordinator · no repo" : root.path));
+    const p = el("div", "path", root.kind === "coordinator" ? "coordinator · no repo" : root.displayPath);
+    p.title = root.path;
+    d.append(head, p);
 
     if (!root.sessions.length) d.append(el("div", "empty", "No active session."));
     for (const s of root.sessions) {

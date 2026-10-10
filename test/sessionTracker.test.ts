@@ -242,3 +242,27 @@ test("tail replay keeps a complete first line when the cut lands on a line bound
   assert.equal(t.get("first")?.status, "done");
   assert.equal(t.get("tail")?.status, "done");
 });
+
+test("PostToolUse clears the finished tool, so a later question does not show it", () => {
+  const h = harness([A]);
+  h.emit({ event: "PreToolUse", session_id: "s", tool_name: "Edit", tool_hint: "a.cs" }, { event: "PostToolUse", session_id: "s" });
+  assert.equal(h.tracker.get("s")?.currentTool, undefined);
+  // permission prompt arrives between PreToolUse and PostToolUse: the pending tool stays visible
+  h.emit({ event: "PreToolUse", session_id: "s", tool_name: "Bash", tool_hint: "dotnet test" }, { event: "Notification", session_id: "s", message: "Allow Bash?" });
+  assert.equal(h.tracker.get("s")?.status, "waiting");
+  assert.equal(h.tracker.get("s")?.currentTool, "Bash");
+});
+
+test("sortByAttention puts roots with waiting sessions first, then working, then by name", () => {
+  const C = path.resolve("/work/c");
+  const D = path.resolve("/work/d");
+  const h = harness([A, B, C, D]);
+  h.emit(
+    { event: "Stop", session_id: "a", cwd: A },
+    { event: "UserPromptSubmit", session_id: "c", cwd: C, prompt: "x" },
+    { event: "Notification", session_id: "d", cwd: D, message: "?" }
+  );
+  const roots = [A, B, C, D].map((p) => root(p));
+  assert.deepEqual(h.tracker.sortByAttention(roots).map((r) => r.name), ["d", "c", "a", "b"]);
+  assert.equal(h.tracker.attentionRank(B), 4);
+});

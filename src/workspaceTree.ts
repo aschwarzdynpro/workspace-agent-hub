@@ -1,6 +1,7 @@
 import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
 import { getConfig, getRoots } from "./config";
+import { age, relTime, statusLabel } from "./format";
 import { SessionTracker } from "./sessionTracker";
 import { Root, Session, SessionStatus, TranscriptInfo } from "./types";
 
@@ -69,11 +70,10 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
         return item;
       }
       case "transcript": {
-        const item = new vscode.TreeItem(node.title, vscode.TreeItemCollapsibleState.None);
-        item.description = relTime(node.modifiedAt);
+        const item = new vscode.TreeItem(`${age(node.modifiedAt)} · ${node.title}`, vscode.TreeItemCollapsibleState.None);
         item.iconPath = new vscode.ThemeIcon("history");
         item.contextValue = "transcript";
-        item.tooltip = `Resume ${node.sessionId}`;
+        item.tooltip = `${node.title}\nLast active ${relTime(node.modifiedAt)} · resume ${node.sessionId}`;
         item.command = {
           command: "agentHub.resumeSession",
           title: "Resume",
@@ -85,7 +85,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
   }
 
   getChildren(node?: Node): Node[] {
-    if (!node) return this.roots.map((root) => ({ kind: "root", root }));
+    if (!node) return this.tracker.sortByAttention(this.roots).map((root) => ({ kind: "root", root }));
     if (node.kind === "root") {
       const live = this.tracker.forRoot(node.root.id).filter((s) => s.status !== "ended");
       const liveIds = new Set(live.map((s) => s.id));
@@ -150,31 +150,18 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
   }
 
   private sessionItem(root: Root, s: Session): vscode.TreeItem {
-    const item = new vscode.TreeItem(s.title || "(untitled session)", vscode.TreeItemCollapsibleState.Collapsed);
+    // Status first: VS Code truncates a row at its end, so a narrow sidebar cuts the title,
+    // never the status. (Label highlights would render like search matches, so none.)
+    const label = `${statusLabel(s)} · ${s.title || "(untitled session)"}`;
+    const item = new vscode.TreeItem(label, vscode.TreeItemCollapsibleState.Collapsed);
     item.id = `session:${s.id}`;
     item.contextValue = `session-${s.status}`;
-    item.description = statusLabel(s);
     item.iconPath = statusIcon(s.status);
     item.tooltip = new vscode.MarkdownString(
       [`**${s.title || s.id}**`, "", `Status: ${s.status}`, `cwd: \`${s.cwd}\``, s.lastMessage ? `\n> ${s.lastMessage}` : ""].join("\n")
     );
     item.command = { command: "agentHub.focusSession", title: "Open", arguments: [{ kind: "session", root, session: s }] };
     return item;
-  }
-}
-
-export function statusLabel(s: Session): string {
-  switch (s.status) {
-    case "working":
-      return s.currentTool ? `working · ${s.currentTool}` : "working";
-    case "waiting":
-      return `waiting for you · ${relTime(s.waitingSince ?? s.lastEventAt)}`;
-    case "done":
-      return `done · ${relTime(s.lastEventAt)}`;
-    case "idle":
-      return `idle · ${relTime(s.lastEventAt)}`;
-    case "ended":
-      return "ended";
   }
 }
 
@@ -191,12 +178,4 @@ export function statusIcon(status: SessionStatus): vscode.ThemeIcon {
     case "ended":
       return new vscode.ThemeIcon("circle-slash", new vscode.ThemeColor("disabledForeground"));
   }
-}
-
-export function relTime(ms: number): string {
-  const d = Date.now() - ms;
-  if (d < 60_000) return "just now";
-  if (d < 3_600_000) return `${Math.round(d / 60_000)} min ago`;
-  if (d < 86_400_000) return `${Math.round(d / 3_600_000)} h ago`;
-  return `${Math.round(d / 86_400_000)} d ago`;
 }
