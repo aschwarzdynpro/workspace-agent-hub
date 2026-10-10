@@ -1,6 +1,7 @@
 import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
+import { normalizePath } from "../src/paths";
 import { SessionTracker } from "../src/sessionTracker";
 import { Root } from "../src/types";
 
@@ -8,9 +9,13 @@ export function tmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), "agent-hub-test-"));
 }
 
+/** Root ids are normalized like config.getRoots() does (lower-case on Windows). */
 export function root(p: string, name = path.basename(p)): Root {
-  return { id: p, name, path: p, kind: "repo", source: "settings" };
+  return { id: normalizePath(p), name, path: p, kind: "repo", source: "settings" };
 }
+
+/** The id a root at this path gets, for comparing with Session.rootId. */
+export const id = normalizePath;
 
 export interface Harness {
   spool: string;

@@ -3,7 +3,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
 import { SessionTracker } from "../src/sessionTracker";
-import { ago, harness, line, root, tmpDir } from "./helpers";
+import { ago, harness, id, line, root, tmpDir } from "./helpers";
 
 const A = path.resolve("/work/a");
 const B = path.resolve("/work/b");
@@ -57,11 +57,11 @@ test("sessions are assigned to roots by exact cwd or longest prefix", () => {
   h.emit({ event: "SessionStart", session_id: "deep", cwd: path.join(nested, "src") });
   h.emit({ event: "SessionStart", session_id: "b", cwd: path.join(B, "x") });
   h.emit({ event: "SessionStart", session_id: "none", cwd: path.resolve("/elsewhere") });
-  assert.equal(h.tracker.get("a")?.rootId, A);
-  assert.equal(h.tracker.get("deep")?.rootId, nested);
-  assert.equal(h.tracker.get("b")?.rootId, B);
+  assert.equal(h.tracker.get("a")?.rootId, id(A));
+  assert.equal(h.tracker.get("deep")?.rootId, id(nested));
+  assert.equal(h.tracker.get("b")?.rootId, id(B));
   assert.equal(h.tracker.get("none")?.rootId, "");
-  assert.deepEqual(h.tracker.forRoot(A).map((s) => s.id), ["a"]);
+  assert.deepEqual(h.tracker.forRoot(id(A)).map((s) => s.id), ["a"]);
 });
 
 test("a root added later picks up its orphaned sessions", () => {
@@ -69,7 +69,7 @@ test("a root added later picks up its orphaned sessions", () => {
   h.emit({ event: "SessionStart", session_id: "b", cwd: B });
   assert.equal(h.tracker.get("b")?.rootId, "");
   h.tracker.setRoots([root(A), root(B)]);
-  assert.equal(h.tracker.get("b")?.rootId, B);
+  assert.equal(h.tracker.get("b")?.rootId, id(B));
 });
 
 test("forRoot sorts waiting → working → done, newest first", () => {
@@ -80,7 +80,7 @@ test("forRoot sorts waiting → working → done, newest first", () => {
     { event: "UserPromptSubmit", session_id: "working", prompt: "x" },
     { event: "Notification", session_id: "waiting", message: "?" }
   );
-  assert.deepEqual(h.tracker.forRoot(A).map((s) => s.id), ["waiting", "working", "done-new", "done-old"]);
+  assert.deepEqual(h.tracker.forRoot(id(A)).map((s) => s.id), ["waiting", "working", "done-new", "done-old"]);
 });
 
 test("stale done/working sessions read as idle; waiting stays waiting", () => {
@@ -264,5 +264,5 @@ test("sortByAttention puts roots with waiting sessions first, then working, then
   );
   const roots = [A, B, C, D].map((p) => root(p));
   assert.deepEqual(h.tracker.sortByAttention(roots).map((r) => r.name), ["d", "c", "a", "b"]);
-  assert.equal(h.tracker.attentionRank(B), 4);
+  assert.equal(h.tracker.attentionRank(id(B)), 4);
 });
