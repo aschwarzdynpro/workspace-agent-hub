@@ -101,6 +101,11 @@ export class SessionTracker implements vscode.Disposable {
     return c;
   }
 
+  /** Re-notify listeners so derived state (idle, relative times) is recomputed without new events. */
+  tick(): void {
+    this.fire();
+  }
+
   /** Called by the terminal launcher so a freshly spawned terminal is linked before the first event. */
   expectSession(terminalId: string, rootId: string): void {
     this.pendingTerminals.set(terminalId, rootId);
@@ -205,7 +210,10 @@ export class SessionTracker implements vscode.Disposable {
         s.status = "working";
         break;
       case "Notification":
-        // permission_prompt | idle_prompt | elicitation | auth … — all mean "needs you".
+        // idle_prompt fires ~60 s after Stop and auth_success is informational: neither is a
+        // question, so the session stays "done". Everything else (permission_prompt,
+        // elicitation_dialog, untyped notifications from older versions) needs the user.
+        if (ev.notification_type === "idle_prompt" || ev.notification_type === "auth_success") break;
         s.status = "waiting";
         s.lastMessage = ev.message ?? undefined;
         break;

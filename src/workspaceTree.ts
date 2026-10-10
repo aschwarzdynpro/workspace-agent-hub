@@ -56,7 +56,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
       case "root":
         return this.rootItem(node.root);
       case "session":
-        return this.sessionItem(node.session);
+        return this.sessionItem(node.root, node.session);
       case "detail": {
         const item = new vscode.TreeItem(node.text, vscode.TreeItemCollapsibleState.None);
         item.iconPath = node.icon ? new vscode.ThemeIcon(node.icon) : undefined;
@@ -67,7 +67,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
         const item = new vscode.TreeItem(node.title, vscode.TreeItemCollapsibleState.None);
         item.description = relTime(node.modifiedAt);
         item.iconPath = new vscode.ThemeIcon("history");
-        item.contextValue = "session-ended";
+        item.contextValue = "transcript";
         item.tooltip = `Resume ${node.sessionId}`;
         item.command = {
           command: "agentHub.resumeSession",
@@ -131,7 +131,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
     return item;
   }
 
-  private sessionItem(s: Session): vscode.TreeItem {
+  private sessionItem(root: Root, s: Session): vscode.TreeItem {
     const item = new vscode.TreeItem(s.title || "(untitled session)", vscode.TreeItemCollapsibleState.Collapsed);
     item.id = `session:${s.id}`;
     item.contextValue = `session-${s.status}`;
@@ -140,7 +140,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
     item.tooltip = new vscode.MarkdownString(
       [`**${s.title || s.id}**`, "", `Status: ${s.status}`, `cwd: \`${s.cwd}\``, s.lastMessage ? `\n> ${s.lastMessage}` : ""].join("\n")
     );
-    item.command = { command: "agentHub.focusSession", title: "Open", arguments: [{ kind: "session", session: s }] };
+    item.command = { command: "agentHub.focusSession", title: "Open", arguments: [{ kind: "session", root, session: s }] };
     return item;
   }
 }

@@ -62,24 +62,19 @@ export class OverviewPanel {
   }
 
   private async onMessage(m: { type: string; rootId?: string; sessionId?: string }): Promise<void> {
-    const root = this.roots().find((r) => r.id === m.rootId);
+    const session = m.sessionId ? this.tracker.get(m.sessionId) : undefined;
+    const rootId = session?.rootId ?? m.rootId;
+    const root = this.roots().find((r) => r.id === rootId);
     switch (m.type) {
       case "newSession":
         if (root) await vscode.commands.executeCommand("agentHub.newSession", { kind: "root", root });
         break;
-      case "focus": {
-        const session = m.sessionId ? this.tracker.get(m.sessionId) : undefined;
-        if (session) await vscode.commands.executeCommand("agentHub.focusSession", { kind: "session", session });
+      case "focus":
+        if (root && session) await vscode.commands.executeCommand("agentHub.focusSession", { kind: "session", root, session });
         break;
-      }
       case "resume":
         if (root) await vscode.commands.executeCommand("agentHub.resumeSession", { kind: "root", root });
         break;
-      case "transcript": {
-        const session = m.sessionId ? this.tracker.get(m.sessionId) : undefined;
-        if (session) await vscode.commands.executeCommand("agentHub.openTranscript", { kind: "session", session });
-        break;
-      }
       case "refresh":
         this.update();
         break;

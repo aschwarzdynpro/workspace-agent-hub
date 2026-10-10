@@ -53,7 +53,7 @@ hervorgehoben, Buttons: Open, New session, Resume. Read-only, bekommt State per 
 | SessionStart | done | Titel aus Transkript laden |
 | UserPromptSubmit | working | turns++, Titel beim ersten Prompt setzen |
 | PreToolUse / PostToolUse | working | currentTool, currentToolHint |
-| Notification | waiting | lastMessage (Frage/Permission) |
+| Notification | waiting | lastMessage (Frage/Permission); `idle_prompt`/`auth_success` ändern den Status nicht |
 | Stop | done | currentTool löschen |
 | SessionEnd | ended | wird aus dem Tree entfernt |
 | keine Events seit `staleAfterMinutes` | idle | berechnet beim Lesen |
