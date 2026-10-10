@@ -133,6 +133,9 @@ Sessions lesen Hooks erst nach Neustart.
 
 ## Offene Punkte (auf dem echten Rechner verifizieren)
 
+`Agent Hub: Diagnose` beantwortet 1, 2, 3 und 6 automatisch und öffnet einen Markdown-Bericht.
+Der Hook schreibt dafür die *Namen* der Payload-Felder mit (`keys`), keine Inhalte.
+
 1. **Projektverzeichnis-Encoding** in `~/.claude/projects/`: Annahme `[^A-Za-z0-9] → -`.
    Prüfen: `ls ~/.claude/projects` neben einem bekannten Pfad; ggf. `encodeProjectDir()` anpassen.
 2. **Hook-Payload-Felder**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`,

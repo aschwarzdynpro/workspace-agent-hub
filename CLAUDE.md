@@ -23,6 +23,8 @@ isolated workspaces. Each agent only ever sees its own root (cwd); the hub never
 | `src/hookInstaller.ts` | merges our hooks into `~/.claude/settings.json` (idempotent, with backup) |
 | `src/workspaceTree.ts` | TreeDataProvider for the sidebar |
 | `src/connectionTree.ts` | small health view (hooks / spool / transcripts) |
+| `src/diagnostics.ts` | Markdown report that checks SPEC open questions on the user's machine |
+| `src/rootEnv.ts` | per-root `env` / `envFile` for that root's terminals |
 | `src/overviewPanel.ts` + `media/` | read-only webview overview |
 | `src/statusBar.ts` | status bar counter |
 | `hooks/hub-event.js` | the Claude Code hook: stdin JSON → one NDJSON line, exit 0 always |
@@ -50,7 +52,7 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 ## Roadmap (work top-down, one feature per PR/commit)
 
 1. [x] Scaffold: package.json contributions, tree, launcher, hooks, overview, status bar
-2. [ ] Verify on a real machine: project-dir encoding, hook payload fields, `Notification` types → fix `SPEC.md`
+2. [ ] Verify on a real machine: run *Agent Hub: Diagnose* (covers encoding, payload fields, `Notification` types, terminal revival) → fix `SPEC.md`
 3. [x] Terminal ↔ session mapping robustness (`AGENT_HUB_TERMINAL` env is the primary key; fall back to cwd)
 4. [ ] Chat mode: read command ids from the installed `anthropic.claude-code` extension and wire `agentHub.chatCommandId`
 5. [x] "Answer" action: focus terminal and, if the session waits for permission, show the pending question in the tree

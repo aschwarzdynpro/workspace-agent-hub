@@ -67,6 +67,8 @@ export interface SpoolEvent {
   terminal: string | null;
   root: string | null;
   pid: number;
+  /** Payload field names as received by the hook (newer hook versions only). */
+  keys?: string[];
 }
 
 /** A session discovered from ~/.claude/projects/<encoded>/<id>.jsonl */

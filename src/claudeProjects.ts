@@ -66,6 +66,15 @@ export function readTranscriptTitle(transcriptPath: string): string | undefined 
   }
 }
 
+/** cwd recorded in the first lines of a transcript. */
+export function readTranscriptCwd(transcriptPath: string): string | undefined {
+  try {
+    return summarizeHead(readHead(transcriptPath, 16 * 1024)).cwd;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Does the given transcript belong to this root? (cwd stored in the first lines) */
 export function transcriptBelongsTo(transcriptPath: string, rootPath: string): boolean {
   try {

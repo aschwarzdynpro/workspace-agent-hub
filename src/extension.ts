@@ -2,6 +2,7 @@ import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
 import { addRootToSettings, getConfig, normalizePath } from "./config";
 import { ConnectionTree } from "./connectionTree";
+import { buildDiagnostics } from "./diagnostics";
 import { hooksInstalled, installHooks } from "./hookInstaller";
 import { Launcher } from "./launcher";
 import { OverviewPanel } from "./overviewPanel";
@@ -80,6 +81,23 @@ export function activate(context: vscode.ExtensionContext): void {
     tracker.onDidChange(updateBadge),
     tracker.onDidStartWaiting((s) => void announceWaiting(s)),
     vscode.commands.registerCommand("agentHub.focusNextWaiting", focusNextWaiting),
+
+    vscode.commands.registerCommand("agentHub.diagnose", async () => {
+      const cfg = getConfig();
+      const report = buildDiagnostics({
+        claudeHome: cfg.claudeHome,
+        spoolPath: cfg.spoolPath,
+        roots: tree.getRoots(),
+        hooksInstalled: hooksInstalled(context),
+        terminals: vscode.window.terminals.map((t) => ({
+          name: t.name,
+          hubId: (t.creationOptions as vscode.TerminalOptions).env?.AGENT_HUB_TERMINAL ?? undefined,
+        })),
+        extensionVersion: String(context.extension.packageJSON.version ?? ""),
+      });
+      const doc = await vscode.workspace.openTextDocument({ language: "markdown", content: report });
+      await vscode.window.showTextDocument(doc, { preview: false });
+    }),
 
     vscode.commands.registerCommand("agentHub.refresh", () => {
       tree.reload();

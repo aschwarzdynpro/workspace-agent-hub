@@ -73,6 +73,12 @@ export class ConnectionTree implements vscode.TreeDataProvider<Line> {
         description: cfg.launchMode === "chat" && !cfg.chatCommandId ? "chatCommandId missing → terminal fallback" : cfg.claudeCommand,
         ok: cfg.launchMode === "terminal" || !!cfg.chatCommandId ? true : false,
       },
+      {
+        label: "Run diagnostics",
+        description: "verify Claude Code assumptions on this machine",
+        ok: null,
+        command: "agentHub.diagnose",
+      },
     ];
   }
 }

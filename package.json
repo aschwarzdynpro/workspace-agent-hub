@@ -125,6 +125,12 @@
         "title": "Go to Next Session Waiting for Me",
         "category": "Agent Hub",
         "icon": "$(bell-dot)"
+      },
+      {
+        "command": "agentHub.diagnose",
+        "title": "Diagnose (check Claude Code assumptions)",
+        "category": "Agent Hub",
+        "icon": "$(pulse)"
       }
     ],
     "menus": {
@@ -162,6 +168,11 @@
         {
           "command": "agentHub.addAllRootsToWindow",
           "when": "view == agentHub.workspaces",
+          "group": "1_setup"
+        },
+        {
+          "command": "agentHub.diagnose",
+          "when": "view == agentHub.workspaces || view == agentHub.connection",
           "group": "1_setup"
         }
       ],
