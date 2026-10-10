@@ -47,6 +47,34 @@ test("title: skips injected '<…>' text parts before the prompt in the same mes
   assert.equal(readTranscriptTitle(p), "wi-analyse ITGDYN-364");
 });
 
+test("title: skips isMeta user lines (skill bodies injected by Claude Code)", () => {
+  const home = tmpDir();
+  const p = writeTranscript(home, "/r", "a", [
+    { ...user([{ type: "text", text: "Base directory for this skill: C:\\x" }]), isMeta: true },
+    user("Mach mir ein Update"),
+  ]);
+  assert.equal(readTranscriptTitle(p), "Mach mir ein Update");
+});
+
+test("title: /rename beats the AI title, which beats summary and prompt; the last record wins", () => {
+  const home = tmpDir();
+  const ai = (aiTitle: string) => ({ type: "ai-title", aiTitle, sessionId: "a" });
+  const custom = (customTitle: string) => ({ type: "custom-title", customTitle, sessionId: "a" });
+  const p = writeTranscript(home, "/r", "a", [user("first prompt"), { type: "summary", summary: "S" }, ai("Old AI"), ai("New AI")]);
+  assert.equal(readTranscriptTitle(p), "New AI");
+  fs.appendFileSync(p, [custom("ITGDYN-1"), ai("Newer AI"), custom("ITGDYN-2")].map((l) => JSON.stringify(l)).join("\n") + "\n");
+  assert.equal(readTranscriptTitle(p), "ITGDYN-2");
+});
+
+test("title: a /rename appended after a large transcript body is found in the tail", () => {
+  const home = tmpDir();
+  const filler = Array.from({ length: 400 }, (_, i) => ({ type: "assistant", message: { role: "assistant", content: "x".repeat(1000) + i } }));
+  const p = writeTranscript(home, "/r", "a", [user("first prompt"), ...filler, { type: "custom-title", customTitle: "Renamed", sessionId: "a" }]);
+  assert.ok(fs.statSync(p).size > 2 * 64 * 1024);
+  assert.equal(readTranscriptTitle(p), "Renamed");
+  assert.equal(listTranscripts(home, "/r", 1)[0].title, "Renamed");
+});
+
 test("title of a missing file is undefined, not an exception", () => {
   assert.equal(readTranscriptTitle(path.join(tmpDir(), "nope.jsonl")), undefined);
 });
