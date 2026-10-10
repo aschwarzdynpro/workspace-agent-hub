@@ -146,7 +146,7 @@
       },
       {
         "command": "agentHub.revealFile",
-        "title": "Reveal File",
+        "title": "Reveal in Explorer",
         "category": "Agent Hub",
         "icon": "$(folder-opened)"
       }
@@ -237,7 +237,7 @@
         },
         {
           "command": "agentHub.revealFile",
-          "when": "view == agentHub.workspaces && viewItem =~ /^file/",
+          "when": "view == agentHub.workspaces && viewItem =~ /^(file|dir)/",
           "group": "2_nav"
         }
       ],

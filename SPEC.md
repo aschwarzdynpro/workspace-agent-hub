@@ -40,6 +40,12 @@ Nicht-Ziele (Stufe 1): eigenes Chat-UI, eigener Agent-Loop, API-Aufrufe, Fork vo
   geschriebene Dateien sieht der Hub nicht. Ein Klick öffnet die Datei als festen Tab, Markdown als
   gerenderte Vorschau (`agentHub.openMarkdownAs`); die Inline-Aktion öffnet den Quelltext.
 - Resume-Einträge klappen per Klick auf und zeigen ihre Dateien; Resume ist die Inline-Aktion.
+- „Files“ als letzter Knoten jedes Roots: dessen Ordnerstruktur wie im Explorer, Ebene für Ebene beim
+  Aufklappen gelesen (Ordner zuerst, Namen ohne Groß-/Kleinschreibung und mit natürlicher
+  Zahlensortierung, höchstens 500 Einträge pro Ebene). Ausgeblendet wird, was `files.exclude` als
+  ganzen Namen ausschließt (z. B. `**/.git`); Muster mit weiteren Wildcards werden nicht ausgewertet.
+  Dateien öffnen wie oben; Kontextmenü „Reveal in Explorer“ für Dateien und Ordner. Es gibt keinen
+  eigenen Dateiwatcher: Der Baum liest bei jedem Refresh neu (Hook-Events, 30-s-Tick, Refresh-Button).
 - Inline-Aktionen: Root → New Session, Resume; Session → Terminal öffnen, Transkript öffnen.
 - „Reveal Root" / „Reveal File": im Explorer, wenn der Ordner im Fenster ist, sonst im Datei-Explorer
   des Betriebssystems.

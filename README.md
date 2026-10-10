@@ -61,7 +61,8 @@ VS Code window holds every customer — Explorer, Git and Search across all root
 per root, and each agent still sees only its own folder.
 
 Every session (live or in the resume list) expands to the files it wrote with Write/Edit. A click
-opens one as a tab, Markdown rendered; the inline button opens the source.
+opens one as a tab, Markdown rendered; the inline button opens the source. Each root also has a
+**Files** node with its folder tree, so a root's files are reachable without adding it to the window.
 
 ## How it works
 
