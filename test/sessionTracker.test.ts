@@ -206,3 +206,39 @@ test("waiting() lists longest-waiting first", () => {
   );
   assert.deepEqual(h.tracker.waiting().map((s) => s.id), ["longest", "recent"]);
 });
+
+test("late events from a closed hub terminal cannot revive its session", () => {
+  const h = harness([A]);
+  h.emit({ event: "UserPromptSubmit", session_id: "s", terminal: "T", prompt: "x" });
+  // written but not yet read when the terminal closes
+  fs.appendFileSync(h.spool, JSON.stringify(line({ event: "PreToolUse", session_id: "s", terminal: "T", tool_name: "Bash" }, A)) + "\n");
+  h.tracker.terminalClosed("T");
+  assert.equal(h.tracker.get("s")?.status, "ended");
+  const fired: string[] = [];
+  h.tracker.onDidStartWaiting((s) => fired.push(s.id));
+  h.emit({ event: "Notification", session_id: "s", terminal: "T", message: "?" });
+  assert.equal(h.tracker.get("s")?.status, "ended");
+  assert.deepEqual(fired, []);
+  h.tracker.tick(); // pruned …
+  h.emit({ event: "Stop", session_id: "s", terminal: "T" }); // … and a straggler recreates it
+  assert.equal(h.tracker.get("s")?.status, "ended");
+});
+
+test("tail replay keeps a complete first line when the cut lands on a line boundary", () => {
+  const dir = tmpDir();
+  const spool = path.join(dir, "events.ndjson");
+  const ev = (o: Record<string, unknown>) => JSON.stringify(line(o, A)) + "\n";
+  const tail = ev({ event: "Stop", session_id: "tail" });
+  const base = ev({ event: "Stop", session_id: "first", pad: "" });
+  const first = ev({ event: "Stop", session_id: "first", pad: "y".repeat(8 * 1024 * 1024 - Buffer.byteLength(base) - Buffer.byteLength(tail)) });
+  const head = ev({ event: "Stop", session_id: "head" });
+  fs.writeFileSync(spool, head + first + tail);
+  assert.equal(fs.statSync(spool).size - 8 * 1024 * 1024, Buffer.byteLength(head), "fixture: cut exactly after head");
+  const t = new SessionTracker({ appendLine: () => undefined }, () => ({ spoolPath: spool, staleAfterMs: 60_000 }));
+  t.setRoots([root(A)]);
+  t.start();
+  t.stop();
+  assert.equal(t.get("head"), undefined);
+  assert.equal(t.get("first")?.status, "done");
+  assert.equal(t.get("tail")?.status, "done");
+});
