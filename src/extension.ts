@@ -9,7 +9,8 @@ import { OverviewPanel } from "./overviewPanel";
 import { SessionTracker } from "./sessionTracker";
 import { StatusBar } from "./statusBar";
 import { Root, Session } from "./types";
-import { Node, WorkspaceTree, relTime } from "./workspaceTree";
+import { relTime } from "./format";
+import { Node, WorkspaceTree } from "./workspaceTree";
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel("Agent Hub");

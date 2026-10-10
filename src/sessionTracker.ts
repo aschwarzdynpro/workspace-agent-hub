@@ -291,7 +291,10 @@ export class SessionTracker {
         s.currentToolHint = ev.tool_hint ?? undefined;
         break;
       case "PostToolUse":
+        // The tool finished: don't keep showing it (e.g. under a later permission question).
         s.status = "working";
+        s.currentTool = undefined;
+        s.currentToolHint = undefined;
         break;
       case "Notification":
         // idle_prompt fires ~60 s after Stop and auth_success is informational: neither is a
@@ -324,6 +327,17 @@ export class SessionTracker {
     }
     this.loadTitle(s);
     return true;
+  }
+
+  /** How urgently a root needs the user: rank of its most urgent live session (waiting = 0). */
+  attentionRank(rootId: string): number {
+    return Math.min(rank("ended"), ...this.forRoot(rootId).map((s) => rank(s.status)));
+  }
+
+  /** Roots ordered by attention (waiting → working → done → idle → nothing), then by name. */
+  sortByAttention<T extends { id: string; name: string }>(roots: T[]): T[] {
+    const r = new Map(roots.map((x) => [x.id, this.attentionRank(x.id)]));
+    return [...roots].sort((a, b) => r.get(a.id)! - r.get(b.id)! || a.name.localeCompare(b.name));
   }
 
   /** Waiting sessions, longest-waiting first. */
