@@ -1,7 +1,7 @@
 import * as assert from "node:assert/strict";
 import * as path from "node:path";
 import { test } from "node:test";
-import { age, displayPath, relTime, statusLabel } from "../src/format";
+import { age, displayPath, fileFolder, relTime, statusLabel } from "../src/format";
 import { Session } from "../src/types";
 
 const NOW = Date.parse("2026-10-10T12:00:00Z");
@@ -34,4 +34,12 @@ test("displayPath: home becomes ~, long paths keep the last two segments", () =>
   assert.equal(displayPath("/home/andyx/src", "/home/andy"), "/home/andyx/src", "prefix of another user's home is not home");
   const long = "/tmp/claude-0/very-long-session-directory-name/scratchpad/demo/kunden/waldmann-crm";
   assert.equal(displayPath(long, "/home/andy"), `…${path.sep}kunden${path.sep}waldmann-crm`);
+});
+
+test("fileFolder: relative inside the root, empty directly in it, shortened outside", () => {
+  const home = path.resolve("/home/me");
+  const root = path.join(home, "kunden", "hub");
+  assert.equal(fileFolder(path.join(root, "a.md"), root, home), "");
+  assert.equal(fileFolder(path.join(root, "wi", "T-1", "a.md"), root, home), path.join("wi", "T-1"));
+  assert.equal(fileFolder(path.join(home, ".claude", "memory", "M.md"), root, home), "~" + path.sep + path.join(".claude", "memory"));
 });

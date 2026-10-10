@@ -15,6 +15,7 @@ export interface HubConfig {
   claudeHome: string;
   staleAfterMs: number;
   notifyWhenWaiting: boolean;
+  openMarkdownAs: "preview" | "editor";
 }
 
 export function getConfig(): HubConfig {
@@ -29,6 +30,7 @@ export function getConfig(): HubConfig {
     claudeHome: expandHome(c.get<string>("claudeHome", "~/.claude")),
     staleAfterMs: Math.max(1, c.get<number>("staleAfterMinutes", 30)) * 60_000,
     notifyWhenWaiting: c.get<boolean>("notifyWhenWaiting", true),
+    openMarkdownAs: c.get<"preview" | "editor">("openMarkdownAs", "preview"),
   };
 }
 

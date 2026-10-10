@@ -49,3 +49,12 @@ export function displayPath(p: string, home: string, max = 48): string {
   const parts = out.split(/[\\/]+/).filter(Boolean);
   return parts.length > 2 ? `…${path.sep}${parts.slice(-2).join(path.sep)}` : out;
 }
+
+/** Folder of a file for a tree description: relative to the root ("" directly in it), else shortened absolute. */
+export function fileFolder(file: string, rootPath: string, home: string): string {
+  const dir = path.dirname(file);
+  const rel = path.relative(rootPath, dir);
+  if (!rel) return "";
+  if (!rel.startsWith("..") && !path.isAbsolute(rel)) return rel;
+  return displayPath(dir, home);
+}
