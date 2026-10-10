@@ -24,8 +24,7 @@ type HooksMap = Record<string, HookGroup[]>;
 export async function installHooks(context: vscode.ExtensionContext): Promise<void> {
   const cfg = getConfig();
   const settingsPath = path.join(cfg.claudeHome, "settings.json");
-  const script = path.join(context.extensionPath, "hooks", MARKER);
-  const command = `node ${JSON.stringify(script)}`;
+  const command = hookCommand(context);
 
   let settings: Record<string, unknown> = {};
   if (fs.existsSync(settingsPath)) {
@@ -70,10 +69,18 @@ export async function installHooks(context: vscode.ExtensionContext): Promise<vo
 export function hooksInstalled(context: vscode.ExtensionContext): boolean {
   const settingsPath = path.join(getConfig().claudeHome, "settings.json");
   try {
-    const text = fs.readFileSync(settingsPath, "utf8");
-    const script = path.join(context.extensionPath, "hooks", MARKER);
-    return text.includes(JSON.stringify(script).slice(1, -1));
+    const settings = JSON.parse(fs.readFileSync(settingsPath, "utf8")) as { hooks?: HooksMap };
+    const command = hookCommand(context);
+    return EVENTS.every((ev) => settings.hooks?.[ev]?.some((g) => g.hooks?.some((h) => h.command === command)) ?? false);
   } catch {
     return false;
   }
+}
+
+/**
+ * Plain double quotes, no JSON escaping: `JSON.stringify` would double every backslash of a
+ * Windows path, and cmd would pass the doubled backslashes through literally.
+ */
+function hookCommand(context: vscode.ExtensionContext): string {
+  return `node "${path.join(context.extensionPath, "hooks", MARKER)}"`;
 }

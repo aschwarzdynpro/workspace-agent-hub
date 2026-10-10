@@ -2,7 +2,10 @@ import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
 import { getConfig, getRoots } from "./config";
 import { SessionTracker } from "./sessionTracker";
-import { Root, Session, SessionStatus } from "./types";
+import { Root, Session, SessionStatus, TranscriptInfo } from "./types";
+
+/** Transcript listings hit the disk; tree refreshes happen on every hook event. */
+const TRANSCRIPT_CACHE_MS = 15_000;
 
 export type Node = RootNode | SessionNode | DetailNode | TranscriptNode;
 
@@ -32,6 +35,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
   private readonly _onDidChangeTreeData = new vscode.EventEmitter<Node | undefined | void>();
   readonly onDidChangeTreeData = this._onDidChangeTreeData.event;
   private roots: Root[] = [];
+  private readonly transcriptCache = new Map<string, { at: number; list: TranscriptInfo[] }>();
 
   constructor(private readonly tracker: SessionTracker) {
     this.reload();
@@ -39,6 +43,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
 
   reload(): void {
     this.roots = getRoots();
+    this.transcriptCache.clear();
     this.tracker.setRoots(this.roots);
     this._onDidChangeTreeData.fire();
   }
@@ -86,7 +91,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
       const liveIds = new Set(live.map((s) => s.id));
       const children: Node[] = live.map((session) => ({ kind: "session", root: node.root, session }));
       if (node.root.kind !== "coordinator") {
-        const recent = listTranscripts(getConfig().claudeHome, node.root.path, 5).filter((t) => !liveIds.has(t.sessionId));
+        const recent = this.recentTranscripts(node.root).filter((t) => !liveIds.has(t.sessionId));
         for (const t of recent.slice(0, live.length ? 2 : 3)) {
           children.push({ kind: "transcript", root: node.root, sessionId: t.sessionId, title: t.title, modifiedAt: t.modifiedAt });
         }
@@ -107,6 +112,19 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
 
   getParent(): Node | undefined {
     return undefined;
+  }
+
+  private recentTranscripts(root: Root): TranscriptInfo[] {
+    const hit = this.transcriptCache.get(root.id);
+    if (hit && Date.now() - hit.at < TRANSCRIPT_CACHE_MS) return hit.list;
+    let list: TranscriptInfo[] = [];
+    try {
+      list = listTranscripts(getConfig().claudeHome, root.path, 5);
+    } catch {
+      list = [];
+    }
+    this.transcriptCache.set(root.id, { at: Date.now(), list });
+    return list;
   }
 
   // ---- items -----------------------------------------------------------------

@@ -1,5 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
+import { StringDecoder } from "string_decoder";
 import * as vscode from "vscode";
 import { compact, readTranscriptTitle } from "./claudeProjects";
 import { getConfig, normalizePath } from "./config";
@@ -17,7 +18,14 @@ import { Root, Session, SessionStatus, SpoolEvent } from "./types";
  *   Stop                    → done
  *   SessionEnd              → ended
  *   (no events for N min)   → idle   (computed on read)
+ *   hub terminal closed     → ended
+ *
+ * Ended sessions and sessions silent for PRUNE_AFTER_MS are dropped on the next tick.
  */
+const PRUNE_AFTER_MS = 24 * 60 * 60_000;
+/** On start only the tail of the spool is replayed; older events cannot matter after pruning anyway. */
+const REPLAY_TAIL_BYTES = 8 * 1024 * 1024;
+
 export class SessionTracker implements vscode.Disposable {
   private readonly sessions = new Map<string, Session>();
   private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -25,6 +33,11 @@ export class SessionTracker implements vscode.Disposable {
 
   private offset = 0;
   private partial = "";
+  private decoder = new StringDecoder("utf8");
+  /** Set when replay starts mid-file: the first (partial) line is discarded. */
+  private skipFirstLine = false;
+  /** Sessions whose transcript title was already looked up (avoid re-reading on every event). */
+  private readonly titleTried = new Set<string>();
   private watcher?: fs.FSWatcher;
   private poll?: NodeJS.Timeout;
   private roots: Root[] = [];
@@ -45,12 +58,27 @@ export class SessionTracker implements vscode.Disposable {
   start(): void {
     this.stop();
     this.spool = getConfig().spoolPath;
-    this.offset = 0;
     this.partial = "";
+    this.decoder = new StringDecoder("utf8");
     this.sessions.clear();
-    fs.mkdirSync(path.dirname(this.spool), { recursive: true });
-    if (!fs.existsSync(this.spool)) fs.writeFileSync(this.spool, "");
+    this.titleTried.clear();
+    try {
+      fs.mkdirSync(path.dirname(this.spool), { recursive: true });
+      if (!fs.existsSync(this.spool)) fs.writeFileSync(this.spool, "");
+    } catch (e) {
+      this.log.appendLine(`cannot create spool ${this.spool}: ${String(e)}`);
+    }
+    let size = 0;
+    try {
+      size = fs.statSync(this.spool).size;
+    } catch {
+      size = 0;
+    }
+    this.offset = Math.max(0, size - REPLAY_TAIL_BYTES);
+    this.skipFirstLine = this.offset > 0;
     this.readNew(); // replay history so restarts keep state
+    this.prune();
+    this.fire();
     try {
       this.watcher = fs.watch(this.spool, () => this.scheduleRead());
     } catch (e) {
@@ -103,7 +131,21 @@ export class SessionTracker implements vscode.Disposable {
 
   /** Re-notify listeners so derived state (idle, relative times) is recomputed without new events. */
   tick(): void {
+    this.prune();
     this.fire();
+  }
+
+  /** A hub terminal was closed: its session cannot be running any more. */
+  terminalClosed(terminalId: string): void {
+    this.pendingTerminals.delete(terminalId);
+    let changed = false;
+    for (const s of this.sessions.values()) {
+      if (s.terminalId === terminalId && s.status !== "ended") {
+        s.status = "ended";
+        changed = true;
+      }
+    }
+    if (changed) this.fire();
   }
 
   /** Called by the terminal launcher so a freshly spawned terminal is linked before the first event. */
@@ -133,18 +175,28 @@ export class SessionTracker implements vscode.Disposable {
       // truncated / rotated
       this.offset = 0;
       this.partial = "";
+      this.decoder = new StringDecoder("utf8");
     }
     if (st.size === this.offset) return;
 
     const fd = fs.openSync(this.spool, "r");
     try {
-      const len = st.size - this.offset;
-      const buf = Buffer.alloc(len);
-      fs.readSync(fd, buf, 0, len, this.offset);
-      this.offset = st.size;
-      const text = this.partial + buf.toString("utf8");
+      const buf = Buffer.alloc(st.size - this.offset);
+      let read = 0;
+      while (read < buf.length) {
+        const n = fs.readSync(fd, buf, read, buf.length - read, this.offset + read);
+        if (n === 0) break;
+        read += n;
+      }
+      this.offset += read;
+      // StringDecoder keeps a multi-byte character that was cut mid-write for the next read.
+      const text = this.partial + this.decoder.write(buf.subarray(0, read));
       const lines = text.split("\n");
       this.partial = lines.pop() ?? "";
+      if (this.skipFirstLine && lines.length) {
+        lines.shift();
+        this.skipFirstLine = false;
+      }
       let changed = false;
       for (const line of lines) {
         if (!line.trim()) continue;
@@ -191,7 +243,7 @@ export class SessionTracker implements vscode.Disposable {
     switch (ev.event) {
       case "SessionStart":
         s.status = "done";
-        if (!s.title && s.transcriptPath) s.title = readTranscriptTitle(s.transcriptPath) ?? "";
+        this.loadTitle(s);
         break;
       case "UserPromptSubmit":
         s.status = "working";
@@ -231,8 +283,24 @@ export class SessionTracker implements vscode.Disposable {
       default:
         break;
     }
-    if (!s.title && s.transcriptPath) s.title = readTranscriptTitle(s.transcriptPath) ?? "";
+    this.loadTitle(s);
     return true;
+  }
+
+  private loadTitle(s: Session): void {
+    if (s.title || !s.transcriptPath || this.titleTried.has(s.id)) return;
+    this.titleTried.add(s.id);
+    s.title = readTranscriptTitle(s.transcriptPath) ?? "";
+  }
+
+  private prune(): void {
+    const now = Date.now();
+    for (const [id, s] of this.sessions) {
+      if (s.status === "ended" || now - s.lastEventAt > PRUNE_AFTER_MS) {
+        this.sessions.delete(id);
+        this.titleTried.delete(id);
+      }
+    }
   }
 
   private rootIdFor(cwd: string): string | undefined {

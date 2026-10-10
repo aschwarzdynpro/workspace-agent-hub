@@ -57,6 +57,10 @@ hervorgehoben, Buttons: Open, New session, Resume. Read-only, bekommt State per 
 | Stop | done | currentTool löschen |
 | SessionEnd | ended | wird aus dem Tree entfernt |
 | keine Events seit `staleAfterMinutes` | idle | berechnet beim Lesen |
+| Hub-Terminal geschlossen | ended | |
+| `ended` oder 24 h ohne Events | — | beim nächsten Tick aus dem Speicher entfernt |
+
+Beim Start werden nur die letzten 8 MB des Spools nachgespielt.
 
 Sortierung in Tree und Overview: waiting → working → done → idle.
 
