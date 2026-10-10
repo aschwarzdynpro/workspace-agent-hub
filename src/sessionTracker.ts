@@ -1,14 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { StringDecoder } from "string_decoder";
-import * as vscode from "vscode";
 import { compact, readTranscriptTitle } from "./claudeProjects";
-import { getConfig, normalizePath } from "./config";
+import { Emitter } from "./emitter";
+import { normalizePath } from "./paths";
 import { Root, Session, SessionStatus, SpoolEvent } from "./types";
 
 /**
  * Tails the NDJSON spool written by hooks/hub-event.js and keeps an in-memory
- * session table. Pure state machine; no VS Code UI in here.
+ * session table. Pure state machine: no `vscode` import, so it runs under plain Node tests.
  *
  * Status transitions (per session):
  *   SessionStart            → done   (ready for a prompt)
@@ -26,10 +26,24 @@ const PRUNE_AFTER_MS = 24 * 60 * 60_000;
 /** On start only the tail of the spool is replayed; older events cannot matter after pruning anyway. */
 const REPLAY_TAIL_BYTES = 8 * 1024 * 1024;
 
-export class SessionTracker implements vscode.Disposable {
+export interface TrackerSettings {
+  spoolPath: string;
+  staleAfterMs: number;
+}
+
+export interface TrackerLog {
+  appendLine(line: string): void;
+}
+
+export class SessionTracker {
   private readonly sessions = new Map<string, Session>();
-  private readonly _onDidChange = new vscode.EventEmitter<void>();
+  private readonly _onDidChange = new Emitter<void>();
   readonly onDidChange = this._onDidChange.event;
+  private readonly _onDidStartWaiting = new Emitter<Session>();
+  /** A session started waiting for the user. Live events only, never during the replay on start. */
+  readonly onDidStartWaiting = this._onDidStartWaiting.event;
+  private replaying = false;
+  private startedWaiting: Session[] = [];
 
   private offset = 0;
   private partial = "";
@@ -46,7 +60,10 @@ export class SessionTracker implements vscode.Disposable {
   private spool = "";
   private debounce?: NodeJS.Timeout;
 
-  constructor(private readonly log: vscode.OutputChannel) {}
+  constructor(
+    private readonly log: TrackerLog,
+    private readonly settings: () => TrackerSettings
+  ) {}
 
   setRoots(roots: Root[]): void {
     this.roots = roots;
@@ -59,7 +76,7 @@ export class SessionTracker implements vscode.Disposable {
 
   start(): void {
     this.stop();
-    this.spool = getConfig().spoolPath;
+    this.spool = this.settings().spoolPath;
     this.partial = "";
     this.decoder = new StringDecoder("utf8");
     this.sessions.clear();
@@ -79,7 +96,12 @@ export class SessionTracker implements vscode.Disposable {
     this.offset = Math.max(0, size - REPLAY_TAIL_BYTES);
     // Discard the first line only if the cut lands mid-line.
     this.skipFirstLine = this.offset > 0 && !this.byteBeforeOffsetIsNewline();
-    this.readNew(); // replay history so restarts keep state
+    this.replaying = true;
+    try {
+      this.readNew(); // replay history so restarts keep state
+    } finally {
+      this.replaying = false;
+    }
     this.prune();
     this.fire();
     try {
@@ -102,11 +124,12 @@ export class SessionTracker implements vscode.Disposable {
   dispose(): void {
     this.stop();
     this._onDidChange.dispose();
+    this._onDidStartWaiting.dispose();
   }
 
   all(): Session[] {
     const now = Date.now();
-    const stale = getConfig().staleAfterMs;
+    const stale = this.settings().staleAfterMs;
     return [...this.sessions.values()].map((s) => {
       if ((s.status === "done" || s.status === "working") && now - s.lastEventAt > stale) {
         return { ...s, status: "idle" as SessionStatus };
@@ -212,6 +235,9 @@ export class SessionTracker implements vscode.Disposable {
         }
       }
       if (changed) this.fire();
+      const started = this.startedWaiting;
+      this.startedWaiting = [];
+      for (const s of started) if (this.sessions.get(s.id)?.status === "waiting") this._onDidStartWaiting.fire({ ...s });
     } finally {
       fs.closeSync(fd);
     }
@@ -244,6 +270,7 @@ export class SessionTracker implements vscode.Disposable {
     if (ev.transcript_path) s.transcriptPath = ev.transcript_path;
     s.lastEventAt = Math.max(s.lastEventAt, ts);
     s.lastEvent = ev.event;
+    const wasWaiting = s.status === "waiting";
 
     switch (ev.event) {
       case "SessionStart":
@@ -290,8 +317,20 @@ export class SessionTracker implements vscode.Disposable {
     }
     // A hook that outlives its closed terminal (or an event read late) keeps the session ended.
     if (ev.terminal && this.closedTerminals.has(ev.terminal)) s.status = "ended";
+    if (s.status !== "waiting") s.waitingSince = undefined;
+    else if (!wasWaiting) {
+      s.waitingSince = ts;
+      if (!this.replaying) this.startedWaiting.push(s);
+    }
     this.loadTitle(s);
     return true;
+  }
+
+  /** Waiting sessions, longest-waiting first. */
+  waiting(): Session[] {
+    return this.all()
+      .filter((s) => s.status === "waiting")
+      .sort((a, b) => (a.waitingSince ?? a.lastEventAt) - (b.waitingSince ?? b.lastEventAt));
   }
 
   private byteBeforeOffsetIsNewline(): boolean {
@@ -338,7 +377,7 @@ export class SessionTracker implements vscode.Disposable {
   }
 
   private fire(): void {
-    this._onDidChange.fire();
+    this._onDidChange.fire(undefined);
   }
 }
 

@@ -168,7 +168,7 @@ export function statusLabel(s: Session): string {
     case "working":
       return s.currentTool ? `working · ${s.currentTool}` : "working";
     case "waiting":
-      return "waiting for you";
+      return `waiting for you · ${relTime(s.waitingSince ?? s.lastEventAt)}`;
     case "done":
       return `done · ${relTime(s.lastEventAt)}`;
     case "idle":

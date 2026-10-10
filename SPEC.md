@@ -44,7 +44,20 @@ hervorgehoben, Buttons: Open, New session, Resume. Read-only, bekommt State per 
 
 ### Statusleiste
 
-`$(hubot) 3 working · 1 waiting` links; gelb hinterlegt, sobald etwas wartet; Klick → Overview.
+`$(hubot) 3 working · 1 waiting` links; gelb hinterlegt, sobald etwas wartet. Klick → nächste wartende
+Session, wenn eine wartet, sonst Overview.
+
+### „Was braucht mich?“
+
+- `Agent Hub: Go to Next Session Waiting for Me` (`Ctrl+Alt+W` / `Cmd+Alt+W`, auch als Glocke im
+  View-Titel): springt zur am längsten wartenden Session, jeder weitere Aufruf zur nächsten.
+- Benachrichtigung „<Root>: <Frage>“ mit „Show“, sobald eine Session *live* auf `waiting` wechselt
+  (nicht beim Replay nach dem Start). Immer, auch wenn das Terminal zuletzt aktiv war: VS Code kann
+  nicht erkennen, ob ein Terminal wirklich fokussiert oder sichtbar ist. Abschaltbar über
+  `agentHub.notifyWhenWaiting`.
+- Mit Fokus im Terminal gehen Tastenkürzel von Extensions an die Shell. Beim ersten Sprung fragt der
+  Hub einmal, ob er `agentHub.focusNextWaiting` in `terminal.integrated.commandsToSkipShell` eintragen darf.
+- Tree: wartende Session zeigt „waiting for you · 3 min ago“ und darunter die offene Frage.
 
 ## Status-Maschine (pro Session)
 
@@ -64,12 +77,31 @@ Beim Start werden nur die letzten 8 MB des Spools nachgespielt.
 
 Sortierung in Tree und Overview: waiting → working → done → idle.
 
+## Ein Fenster
+
+`Agent Hub: Open All Roots in This Window` fügt alle Roots als Workspace-Ordner ins aktuelle Fenster
+ein und bietet „Save Workspace As…“ an. Explorer, Git und Suche decken danach alle Roots ab; die
+Agenten bleiben trotzdem isoliert, weil jede Session nur ihr eigenes cwd kennt.
+
+Pro Root (nur für dessen Terminals): `env`, `envFile` (Dotenv relativ zum Root, für Zugangsdaten
+des Kunden), `extraArgs` (nach den globalen), `color` (Terminal-Tab-Farbe, z. B. `terminal.ansiBlue`).
+Die `AGENT_HUB_*`-Variablen werden immer zuletzt gesetzt und können nicht überschrieben werden.
+Ist das `envFile` nicht lesbar, startet das Terminal erst nach modaler Bestätigung („Launch Anyway“),
+weil es sonst die Umgebung von VS Code erbt, die zu einem anderen Kunden gehören kann.
+
+Wechselt das Fenster dabei in einen Multi-Root-Workspace, startet VS Code den Extension-Host neu;
+das Angebot „Save Workspace As…“ wird deshalb in `globalState` gemerkt und nach dem Neustart gezeigt.
+
 ## Launch
 
 - `launchMode: terminal` (Default): `vscode.window.createTerminal({ cwd: root.path, env })`,
   dann `claude [extraArgs] [--resume <id>]`. Die Env-Variablen `AGENT_HUB_TERMINAL` (UUID) und
   `AGENT_HUB_ROOT` werden vom Hook-Skript in jedes Event geschrieben → eindeutige Zuordnung
-  Terminal ↔ Session, unabhängig von cwd-Wechseln.
+  Terminal ↔ Session, unabhängig von cwd-Wechseln. Nach einem Reload liest der Launcher die ID aus
+  `creationOptions.env` der wiederhergestellten Terminals. Fallback für außerhalb des Hubs gestartete
+  Sessions: das einzige offene Nicht-Hub-Terminal, dessen Name „claude“ enthält, mit cwd = Session-cwd;
+  mehrdeutig → keins. Hub-Terminals matchen nie per cwd (nach `/exit` sind sie nur noch eine Shell).
+- Resume einer Session, die noch in einem Hub-Terminal läuft, fokussiert dieses statt sie doppelt zu starten.
 - `launchMode: chat`: ruft `agentHub.chatCommandId` der Anthropic-Extension auf; wenn leer oder
   Fehler → Terminal-Fallback mit Hinweis. Status-Tracking funktioniert für Chat-Sessions
   identisch, weil Hooks und Transkripte dieselben sind.
@@ -97,7 +129,7 @@ Sessions lesen Hooks erst nach Neustart.
 
 | Key | Default | Bedeutung |
 |---|---|---|
-| `agentHub.roots` | `[]` | zusätzliche Roots `{name, path, kind}` |
+| `agentHub.roots` | `[]` | Roots `{path, name?, kind?, env?, envFile?, extraArgs?, color?}`; ein Eintrag mit dem Pfad eines Workspace-Ordners ergänzt dessen Optionen |
 | `agentHub.includeWorkspaceFolders` | `true` | Workspace-Ordner als Roots |
 | `agentHub.launchMode` | `terminal` | `terminal` \| `chat` |
 | `agentHub.claudeCommand` | `claude` | Executable |
@@ -106,8 +138,12 @@ Sessions lesen Hooks erst nach Neustart.
 | `agentHub.spoolPath` | `~/.claude/hub/events.ndjson` | Spool |
 | `agentHub.claudeHome` | `~/.claude` | Claude-Home |
 | `agentHub.staleAfterMinutes` | `30` | Idle-Schwelle |
+| `agentHub.notifyWhenWaiting` | `true` | Benachrichtigung, wenn eine Session auf dich wartet |
 
 ## Offene Punkte (auf dem echten Rechner verifizieren)
+
+`Agent Hub: Diagnose` beantwortet 1, 2, 3 und 6 automatisch und öffnet einen Markdown-Bericht.
+Der Hook schreibt dafür die *Namen* der Payload-Felder mit (`keys`), keine Inhalte.
 
 1. **Projektverzeichnis-Encoding** in `~/.claude/projects/`: Annahme `[^A-Za-z0-9] → -`.
    Prüfen: `ls ~/.claude/projects` neben einem bekannten Pfad; ggf. `encodeProjectDir()` anpassen.
@@ -121,4 +157,8 @@ Sessions lesen Hooks erst nach Neustart.
    übergeben werden können.
 5. **Windows**: Pfad-Quoting im Hook-Command (`node "C:\…\hub-event.js"`) und `fs.watch` auf
    NTFS; Polling-Fallback ist aktiv.
-6. **Kontextverbrauch**: aus dem letzten `usage`-Block im Transkript ableitbar (Roadmap 7).
+6. **Terminal-Wiederherstellung**: Behalten von VS Code nach einem Reload wiederbelebte Terminals
+   `creationOptions.env.AGENT_HUB_TERMINAL`? Und zeigt `Terminal.name` für ein von Hand gestartetes
+   `claude` „claude“ (Fallback-Zuordnung über cwd)? Prüfen: Hub-Session starten, Fenster neu laden,
+   Session im Tree anklicken → muss das alte Terminal fokussieren.
+7. **Kontextverbrauch**: aus dem letzten `usage`-Block im Transkript ableitbar (Roadmap 7).

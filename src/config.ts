@@ -1,21 +1,9 @@
-import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { expandHome, normalizePath } from "./paths";
 import { Root, RootKind } from "./types";
 
-export function expandHome(p: string): string {
-  if (!p) return p;
-  if (p === "~") return os.homedir();
-  if (p.startsWith("~/") || p.startsWith("~\\")) return path.join(os.homedir(), p.slice(2));
-  return p;
-}
-
-/** Normalize a path so the same folder always yields the same id. */
-export function normalizePath(p: string): string {
-  let n = path.resolve(expandHome(p));
-  if (process.platform === "win32") n = n.toLowerCase();
-  return n.replace(/[\\/]+$/, "");
-}
+export { expandHome, normalizePath };
 
 export interface HubConfig {
   includeWorkspaceFolders: boolean;
@@ -26,6 +14,7 @@ export interface HubConfig {
   spoolPath: string;
   claudeHome: string;
   staleAfterMs: number;
+  notifyWhenWaiting: boolean;
 }
 
 export function getConfig(): HubConfig {
@@ -39,16 +28,24 @@ export function getConfig(): HubConfig {
     spoolPath: expandHome(c.get<string>("spoolPath", "~/.claude/hub/events.ndjson")),
     claudeHome: expandHome(c.get<string>("claudeHome", "~/.claude")),
     staleAfterMs: Math.max(1, c.get<number>("staleAfterMinutes", 30)) * 60_000,
+    notifyWhenWaiting: c.get<boolean>("notifyWhenWaiting", true),
   };
 }
 
 interface RootSetting {
-  name: string;
+  name?: string;
   path: string;
   kind?: RootKind;
+  env?: Record<string, string>;
+  envFile?: string;
+  extraArgs?: string[];
+  color?: string;
 }
 
-/** Roots = open workspace folders (optional) + `agentHub.roots`, de-duplicated by path. */
+/**
+ * Roots = open workspace folders (optional) + `agentHub.roots`, de-duplicated by path.
+ * A settings entry with the path of a workspace folder adds its per-root options to that folder.
+ */
 export function getRoots(): Root[] {
   const cfg = getConfig();
   const out = new Map<string, Root>();
@@ -73,13 +70,17 @@ export function getRoots(): Root[] {
       path: abs,
       kind: r.kind ?? existing?.kind ?? "repo",
       source: existing ? existing.source : "settings",
+      env: r.env,
+      envFile: r.envFile,
+      extraArgs: r.extraArgs,
+      color: r.color,
     });
   }
 
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function addRootToSettings(root: RootSetting): Promise<void> {
+export async function addRootToSettings(root: RootSetting & { name: string }): Promise<void> {
   const c = vscode.workspace.getConfiguration("agentHub");
   const current = c.get<RootSetting[]>("roots", []);
   const abs = path.resolve(expandHome(root.path));

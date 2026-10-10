@@ -1,6 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-import { normalizePath } from "./config";
+import { normalizePath } from "./paths";
 import { TranscriptInfo } from "./types";
 
 /**
@@ -66,6 +66,15 @@ export function readTranscriptTitle(transcriptPath: string): string | undefined 
   }
 }
 
+/** cwd recorded in the first lines of a transcript. */
+export function readTranscriptCwd(transcriptPath: string): string | undefined {
+  try {
+    return summarizeHead(readHead(transcriptPath, 16 * 1024)).cwd;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Does the given transcript belong to this root? (cwd stored in the first lines) */
 export function transcriptBelongsTo(transcriptPath: string, rootPath: string): boolean {
   try {
@@ -88,7 +97,9 @@ function readHead(file: string, bytes: number): string {
 }
 
 function summarizeHead(head: string): { title?: string; cwd?: string } {
-  let title: string | undefined;
+  // A summary line anywhere in the head beats the first prompt, so a prompt alone does not stop the scan.
+  let summary: string | undefined;
+  let prompt: string | undefined;
   let cwd: string | undefined;
   for (const raw of head.split("\n")) {
     if (!raw.trim()) continue;
@@ -99,16 +110,14 @@ function summarizeHead(head: string): { title?: string; cwd?: string } {
       continue; // truncated last line
     }
     if (!cwd && line.cwd) cwd = line.cwd;
-    if (line.type === "summary" && line.summary) {
-      title = line.summary;
-      break;
-    }
-    if (!title && line.type === "user" && line.message?.role === "user") {
+    if (!summary && line.type === "summary" && line.summary) summary = line.summary;
+    if (!prompt && line.type === "user" && line.message?.role === "user") {
       const text = extractText(line.message.content);
-      if (text && !text.startsWith("<")) title = text;
+      if (text && !text.startsWith("<")) prompt = text;
     }
-    if (title && cwd) break;
+    if (summary && cwd) break;
   }
+  const title = summary ?? prompt;
   return { title: title ? compact(title) : undefined, cwd };
 }
 

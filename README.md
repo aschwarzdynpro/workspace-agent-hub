@@ -44,11 +44,21 @@ See `SPEC.md` for the full table. The two you are most likely to touch:
 
 ```jsonc
 "agentHub.roots": [
-  { "name": "waldmann-crm", "path": "~/src/waldmann/crm" },
-  { "name": "Koordinator",  "path": "~/src/hub-coordinator", "kind": "coordinator" }
+  {
+    "name": "waldmann-crm",
+    "path": "~/src/waldmann/crm",
+    "envFile": ".env.agent",          // customer credentials, git-ignored, only in this root's terminals
+    "extraArgs": ["--model", "opus"],
+    "color": "terminal.ansiBlue"      // terminal tab color, tells customers apart at a glance
+  },
+  { "name": "invia", "path": "~/src/invia", "color": "terminal.ansiGreen" }
 ],
-"agentHub.extraArgs": ["--model", "opus"]
+"agentHub.extraArgs": ["--permission-mode", "acceptEdits"]
 ```
+
+Run *Agent Hub: Open All Roots in This Window* once and save the workspace: from then on a single
+VS Code window holds every customer — Explorer, Git and Search across all roots, one Claude terminal
+per root, and each agent still sees only its own folder.
 
 ## How it works
 

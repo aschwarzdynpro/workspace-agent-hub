@@ -67,6 +67,8 @@ readStdin((raw) => {
     terminal: process.env.AGENT_HUB_TERMINAL || null,
     root: process.env.AGENT_HUB_ROOT || null,
     pid: process.ppid,
+    // Field names only (no values): lets "Agent Hub: Diagnose" verify the hook payload schema.
+    keys: payload && typeof payload === "object" ? Object.keys(payload).slice(0, 40) : [],
   };
 
   try {

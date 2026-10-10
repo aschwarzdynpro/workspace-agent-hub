@@ -20,7 +20,9 @@ export class StatusBar implements vscode.Disposable {
     if (c.waiting) parts.push(`${c.waiting} waiting`);
     if (c.done) parts.push(`${c.done} done`);
     this.item.text = `$(hubot) ${parts.join(" · ")}`;
-    this.item.tooltip = "Workspace Agent Hub — click for overview";
+    // While someone waits, one click takes you there; otherwise the overview.
+    this.item.command = c.waiting ? "agentHub.focusNextWaiting" : "agentHub.showOverview";
+    this.item.tooltip = c.waiting ? "Workspace Agent Hub — click to go to the next waiting session" : "Workspace Agent Hub — click for overview";
     this.item.backgroundColor = c.waiting ? new vscode.ThemeColor("statusBarItem.warningBackground") : undefined;
   }
 
