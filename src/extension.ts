@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
-import { addRootToSettings, getConfig } from "./config";
+import { addRootToSettings, getConfig, normalizePath } from "./config";
 import { ConnectionTree } from "./connectionTree";
 import { hooksInstalled, installHooks } from "./hookInstaller";
 import { Launcher } from "./launcher";
@@ -126,6 +126,30 @@ export function activate(context: vscode.ExtensionContext): void {
       if (!name) return;
       await addRootToSettings({ name, path: folder.fsPath, kind: kind.value });
       tree.reload();
+    }),
+
+    // One window instead of one per customer: every root becomes a folder of this window,
+    // so Explorer, Git and Search cover all of them. Agents stay isolated by their cwd.
+    vscode.commands.registerCommand("agentHub.addAllRootsToWindow", async () => {
+      const open = new Set((vscode.workspace.workspaceFolders ?? []).map((f) => normalizePath(f.uri.fsPath)));
+      const missing = tree.getRoots().filter((r) => !open.has(r.id));
+      if (missing.length) {
+        const start = vscode.workspace.workspaceFolders?.length ?? 0;
+        const ok = vscode.workspace.updateWorkspaceFolders(start, 0, ...missing.map((r) => ({ uri: vscode.Uri.file(r.path), name: r.name })));
+        if (!ok) {
+          void vscode.window.showErrorMessage("Agent Hub: VS Code refused to add the workspace folders.");
+          return;
+        }
+      }
+      if (vscode.workspace.workspaceFile?.scheme === "file") {
+        if (!missing.length) void vscode.window.showInformationMessage("Agent Hub: all roots are already open in this window.");
+        return;
+      }
+      const choice = await vscode.window.showInformationMessage(
+        `Agent Hub: ${missing.length} root(s) added. Save the workspace so this window opens with all roots next time.`,
+        "Save Workspace As…"
+      );
+      if (choice) await vscode.commands.executeCommand("workbench.action.saveWorkspaceAs");
     }),
 
     vscode.workspace.onDidChangeWorkspaceFolders(() => tree.reload()),

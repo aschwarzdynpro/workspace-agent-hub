@@ -31,12 +31,19 @@ export function getConfig(): HubConfig {
 }
 
 interface RootSetting {
-  name: string;
+  name?: string;
   path: string;
   kind?: RootKind;
+  env?: Record<string, string>;
+  envFile?: string;
+  extraArgs?: string[];
+  color?: string;
 }
 
-/** Roots = open workspace folders (optional) + `agentHub.roots`, de-duplicated by path. */
+/**
+ * Roots = open workspace folders (optional) + `agentHub.roots`, de-duplicated by path.
+ * A settings entry with the path of a workspace folder adds its per-root options to that folder.
+ */
 export function getRoots(): Root[] {
   const cfg = getConfig();
   const out = new Map<string, Root>();
@@ -61,13 +68,17 @@ export function getRoots(): Root[] {
       path: abs,
       kind: r.kind ?? existing?.kind ?? "repo",
       source: existing ? existing.source : "settings",
+      env: r.env,
+      envFile: r.envFile,
+      extraArgs: r.extraArgs,
+      color: r.color,
     });
   }
 
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function addRootToSettings(root: RootSetting): Promise<void> {
+export async function addRootToSettings(root: RootSetting & { name: string }): Promise<void> {
   const c = vscode.workspace.getConfiguration("agentHub");
   const current = c.get<RootSetting[]>("roots", []);
   const abs = path.resolve(expandHome(root.path));

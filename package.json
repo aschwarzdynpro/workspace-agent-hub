@@ -113,6 +113,12 @@
         "title": "Reveal Root in Explorer",
         "category": "Agent Hub",
         "icon": "$(folder)"
+      },
+      {
+        "command": "agentHub.addAllRootsToWindow",
+        "title": "Open All Roots in This Window",
+        "category": "Agent Hub",
+        "icon": "$(multiple-windows)"
       }
     ],
     "menus": {
@@ -139,6 +145,11 @@
         },
         {
           "command": "agentHub.addRoot",
+          "when": "view == agentHub.workspaces",
+          "group": "1_setup"
+        },
+        {
+          "command": "agentHub.addAllRootsToWindow",
           "when": "view == agentHub.workspaces",
           "group": "1_setup"
         }
@@ -196,17 +207,16 @@
         "agentHub.roots": {
           "type": "array",
           "default": [],
-          "markdownDescription": "Additional workspace roots that are not part of the open VS Code workspace. Each root is an isolated Claude Code working directory.",
+          "markdownDescription": "Workspace roots. Each root is an isolated Claude Code working directory. An entry whose `path` matches a folder of the open workspace adds its options (`env`, `envFile`, `extraArgs`, `color`) to that folder.",
           "items": {
             "type": "object",
             "required": [
-              "name",
               "path"
             ],
             "properties": {
               "name": {
                 "type": "string",
-                "description": "Display name"
+                "description": "Display name (defaults to the folder name)"
               },
               "path": {
                 "type": "string",
@@ -220,6 +230,28 @@
                 ],
                 "default": "repo",
                 "description": "`coordinator` roots hold no code; they only read the hub status spool."
+              },
+              "env": {
+                "type": "object",
+                "additionalProperties": {
+                  "type": "string"
+                },
+                "description": "Environment variables for this root's Claude terminals only (e.g. customer tenant)."
+              },
+              "envFile": {
+                "type": "string",
+                "description": "Dotenv file, relative to the root, loaded into this root's Claude terminals. Keep credentials here (git-ignored) instead of in settings."
+              },
+              "extraArgs": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "CLI arguments for this root, appended after `agentHub.extraArgs` (e.g. `--model`)."
+              },
+              "color": {
+                "type": "string",
+                "description": "Terminal tab color, a theme color id such as `terminal.ansiBlue`, `terminal.ansiGreen`, `terminal.ansiMagenta`."
               }
             }
           }

@@ -1,6 +1,7 @@
 import { randomUUID } from "crypto";
 import * as vscode from "vscode";
 import { getConfig } from "./config";
+import { resolveRootEnv } from "./rootEnv";
 import { SessionTracker } from "./sessionTracker";
 import { Root, Session } from "./types";
 
@@ -40,6 +41,9 @@ export class Launcher implements vscode.Disposable {
   }
 
   async resume(root: Root, sessionId: string): Promise<void> {
+    // Never run the same session twice: if it is still open in a hub terminal, go there.
+    const live = this.tracker.get(sessionId);
+    if (live && live.status !== "ended" && this.focus(live)) return;
     this.spawn(root, ["--resume", sessionId]);
   }
 
@@ -56,11 +60,19 @@ export class Launcher implements vscode.Disposable {
   private spawn(root: Root, args: string[]): void {
     const cfg = getConfig();
     const terminalId = randomUUID();
+    const rootEnv = resolveRootEnv(root);
+    if (rootEnv.error) {
+      this.log.appendLine(`[${root.name}] ${rootEnv.error}`);
+      void vscode.window.showWarningMessage(`Agent Hub: ${rootEnv.error}`);
+    }
     const terminal = vscode.window.createTerminal({
       name: `claude · ${root.name}`,
       cwd: root.path,
       iconPath: new vscode.ThemeIcon("sparkle"),
+      color: root.color ? new vscode.ThemeColor(root.color) : undefined,
       env: {
+        ...rootEnv.env,
+        // Hub variables last so a root's env cannot break session tracking.
         AGENT_HUB_TERMINAL: terminalId,
         AGENT_HUB_ROOT: root.name,
         AGENT_HUB_SPOOL: cfg.spoolPath,
@@ -69,7 +81,7 @@ export class Launcher implements vscode.Disposable {
     this.terminals.set(terminalId, terminal);
     this.tracker.expectSession(terminalId, root.id);
 
-    const cmd = [cfg.claudeCommand, ...cfg.extraArgs, ...args].map(quote).join(" ");
+    const cmd = [cfg.claudeCommand, ...cfg.extraArgs, ...(root.extraArgs ?? []), ...args].map(quote).join(" ");
     this.log.appendLine(`[${root.name}] ${cmd}`);
     terminal.show(false);
     terminal.sendText(cmd, true);

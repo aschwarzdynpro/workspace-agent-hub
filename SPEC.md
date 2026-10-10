@@ -64,6 +64,16 @@ Beim Start werden nur die letzten 8 MB des Spools nachgespielt.
 
 Sortierung in Tree und Overview: waiting → working → done → idle.
 
+## Ein Fenster
+
+`Agent Hub: Open All Roots in This Window` fügt alle Roots als Workspace-Ordner ins aktuelle Fenster
+ein und bietet „Save Workspace As…“ an. Explorer, Git und Suche decken danach alle Roots ab; die
+Agenten bleiben trotzdem isoliert, weil jede Session nur ihr eigenes cwd kennt.
+
+Pro Root (nur für dessen Terminals): `env`, `envFile` (Dotenv relativ zum Root, für Zugangsdaten
+des Kunden), `extraArgs` (nach den globalen), `color` (Terminal-Tab-Farbe, z. B. `terminal.ansiBlue`).
+Die `AGENT_HUB_*`-Variablen werden immer zuletzt gesetzt und können nicht überschrieben werden.
+
 ## Launch
 
 - `launchMode: terminal` (Default): `vscode.window.createTerminal({ cwd: root.path, env })`,
@@ -97,7 +107,7 @@ Sessions lesen Hooks erst nach Neustart.
 
 | Key | Default | Bedeutung |
 |---|---|---|
-| `agentHub.roots` | `[]` | zusätzliche Roots `{name, path, kind}` |
+| `agentHub.roots` | `[]` | Roots `{path, name?, kind?, env?, envFile?, extraArgs?, color?}`; ein Eintrag mit dem Pfad eines Workspace-Ordners ergänzt dessen Optionen |
 | `agentHub.includeWorkspaceFolders` | `true` | Workspace-Ordner als Roots |
 | `agentHub.launchMode` | `terminal` | `terminal` \| `chat` |
 | `agentHub.claudeCommand` | `claude` | Executable |

@@ -9,6 +9,14 @@ export interface Root {
   kind: RootKind;
   /** Where the root came from. */
   source: "workspace" | "settings";
+  /** Extra environment for this root's terminals only (e.g. customer tenant). */
+  env?: Record<string, string>;
+  /** Dotenv file, relative to the root, loaded into this root's terminals. */
+  envFile?: string;
+  /** CLI arguments appended after the global `agentHub.extraArgs`. */
+  extraArgs?: string[];
+  /** Theme color id for this root's terminal tabs, e.g. `terminal.ansiBlue`. */
+  color?: string;
 }
 
 export type SessionStatus =
