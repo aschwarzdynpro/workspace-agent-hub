@@ -44,7 +44,17 @@ hervorgehoben, Buttons: Open, New session, Resume. Read-only, bekommt State per 
 
 ### Statusleiste
 
-`$(hubot) 3 working · 1 waiting` links; gelb hinterlegt, sobald etwas wartet; Klick → Overview.
+`$(hubot) 3 working · 1 waiting` links; gelb hinterlegt, sobald etwas wartet. Klick → nächste wartende
+Session, wenn eine wartet, sonst Overview.
+
+### „Was braucht mich?“
+
+- `Agent Hub: Go to Next Session Waiting for Me` (`Ctrl+Alt+W` / `Cmd+Alt+W`, auch als Glocke im
+  View-Titel): springt zur am längsten wartenden Session, jeder weitere Aufruf zur nächsten.
+- Benachrichtigung „<Root>: <Frage>“ mit „Show“, sobald eine Session *live* auf `waiting` wechselt
+  (nicht beim Replay nach dem Start). Unterdrückt, wenn das Terminal dieser Session gerade aktiv ist.
+  Abschaltbar über `agentHub.notifyWhenWaiting`.
+- Tree: wartende Session zeigt „waiting for you · 3 min ago“ und darunter die offene Frage.
 
 ## Status-Maschine (pro Session)
 
@@ -119,6 +129,7 @@ Sessions lesen Hooks erst nach Neustart.
 | `agentHub.spoolPath` | `~/.claude/hub/events.ndjson` | Spool |
 | `agentHub.claudeHome` | `~/.claude` | Claude-Home |
 | `agentHub.staleAfterMinutes` | `30` | Idle-Schwelle |
+| `agentHub.notifyWhenWaiting` | `true` | Benachrichtigung, wenn eine Session auf dich wartet |
 
 ## Offene Punkte (auf dem echten Rechner verifizieren)
 

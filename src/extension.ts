@@ -7,7 +7,7 @@ import { Launcher } from "./launcher";
 import { OverviewPanel } from "./overviewPanel";
 import { SessionTracker } from "./sessionTracker";
 import { StatusBar } from "./statusBar";
-import { Root } from "./types";
+import { Root, Session } from "./types";
 import { Node, WorkspaceTree, relTime } from "./workspaceTree";
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -27,7 +27,35 @@ export function activate(context: vscode.ExtensionContext): void {
   const updateBadge = () => {
     const waiting = tracker.counts().waiting;
     treeView.badge = waiting ? { value: waiting, tooltip: `${waiting} session(s) waiting for you` } : undefined;
+    void vscode.commands.executeCommand("setContext", "agentHub.hasWaiting", waiting > 0);
     tree.refresh();
+  };
+
+  const rootOf = (s: Session) => tree.getRoots().find((r) => r.id === s.rootId);
+  const openSession = (s: Session) =>
+    vscode.commands.executeCommand("agentHub.focusSession", { kind: "session", root: rootOf(s), session: s });
+
+  // Cycle through waiting sessions, longest-waiting first.
+  let lastJumped: string | undefined;
+  const focusNextWaiting = async () => {
+    const waiting = tracker.waiting();
+    if (!waiting.length) {
+      vscode.window.setStatusBarMessage("$(check) Agent Hub: nobody is waiting for you", 3000);
+      return;
+    }
+    const next = waiting[(waiting.findIndex((s) => s.id === lastJumped) + 1) % waiting.length];
+    lastJumped = next.id;
+    await openSession(next);
+  };
+
+  const announceWaiting = async (s: Session) => {
+    if (!getConfig().notifyWhenWaiting) return;
+    const terminal = launcher.terminalFor(s);
+    if (vscode.window.state.focused && terminal && vscode.window.activeTerminal === terminal) return;
+    const where = rootOf(s)?.name ?? s.cwd;
+    const choice = await vscode.window.showWarningMessage(`${where}: ${s.lastMessage || "waiting for you"}`, "Show");
+    const current = tracker.get(s.id);
+    if (choice && current) await openSession(current);
   };
 
   // Resolve the root from a tree node, a webview message, or by asking.
@@ -50,6 +78,8 @@ export function activate(context: vscode.ExtensionContext): void {
     treeView,
     connView,
     tracker.onDidChange(updateBadge),
+    tracker.onDidStartWaiting((s) => void announceWaiting(s)),
+    vscode.commands.registerCommand("agentHub.focusNextWaiting", focusNextWaiting),
 
     vscode.commands.registerCommand("agentHub.refresh", () => {
       tree.reload();
@@ -83,11 +113,12 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("agentHub.focusSession", async (node?: Node) => {
       if (node?.kind !== "session") return;
       if (launcher.focus(node.session)) return;
-      // Not spawned by us (started in an external terminal or the chat panel): offer resume.
+      // Not in a terminal of this window (external terminal, chat panel): offer resume.
+      const question = node.session.status === "waiting" && node.session.lastMessage ? ` It asks: "${node.session.lastMessage}"` : "";
+      const actions = node.root ? ["Resume in new terminal", "Open transcript"] : ["Open transcript"];
       const choice = await vscode.window.showInformationMessage(
-        `Session "${node.session.title || node.session.id}" is not attached to a hub terminal.`,
-        "Resume in new terminal",
-        "Open transcript"
+        `Session "${node.session.title || node.session.id}" is not attached to a terminal in this window.${question}`,
+        ...actions
       );
       if (choice === "Resume in new terminal") await launcher.resume(node.root, node.session.id);
       if (choice === "Open transcript") await vscode.commands.executeCommand("agentHub.openTranscript", node);

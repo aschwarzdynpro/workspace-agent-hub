@@ -119,10 +119,21 @@
         "title": "Open All Roots in This Window",
         "category": "Agent Hub",
         "icon": "$(multiple-windows)"
+      },
+      {
+        "command": "agentHub.focusNextWaiting",
+        "title": "Go to Next Session Waiting for Me",
+        "category": "Agent Hub",
+        "icon": "$(bell-dot)"
       }
     ],
     "menus": {
       "view/title": [
+        {
+          "command": "agentHub.focusNextWaiting",
+          "when": "view == agentHub.workspaces && agentHub.hasWaiting",
+          "group": "navigation@0"
+        },
         {
           "command": "agentHub.newSession",
           "when": "view == agentHub.workspaces",
@@ -306,9 +317,21 @@
           "type": "number",
           "default": 30,
           "description": "A session without events for this long is shown as idle."
+        },
+        "agentHub.notifyWhenWaiting": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show a notification when a session starts waiting for you (permission or question). Skipped while you are already looking at that session's terminal."
         }
       }
-    }
+    },
+    "keybindings": [
+      {
+        "command": "agentHub.focusNextWaiting",
+        "key": "ctrl+alt+w",
+        "mac": "cmd+alt+w"
+      }
+    ]
   },
   "scripts": {
     "vscode:prepublish": "npm run build",

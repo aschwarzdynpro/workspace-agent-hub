@@ -167,3 +167,42 @@ test("transcript title is used when no prompt was seen", () => {
   h.emit({ event: "SessionStart", session_id: "s", transcript_path: transcript });
   assert.equal(h.tracker.get("s")?.title, "Refactor the importer");
 });
+
+test("onDidStartWaiting fires once per transition into waiting, with waitingSince", () => {
+  const h = harness([A]);
+  const fired: string[] = [];
+  h.tracker.onDidStartWaiting((s) => fired.push(`${s.id}:${s.lastMessage}`));
+  h.emit({ event: "Notification", session_id: "s", message: "Allow Bash?", ts: ago(2 * 60_000) });
+  h.emit({ event: "Notification", session_id: "s", message: "Allow Bash? (again)" });
+  assert.deepEqual(fired, ["s:Allow Bash?"]);
+  const since = h.tracker.get("s")?.waitingSince ?? 0;
+  assert.ok(Date.now() - since >= 2 * 60_000 - 1000);
+  h.emit({ event: "PostToolUse", session_id: "s" });
+  assert.equal(h.tracker.get("s")?.waitingSince, undefined);
+  h.emit({ event: "Notification", session_id: "s", message: "Next question" });
+  assert.deepEqual(fired, ["s:Allow Bash?", "s:Next question"]);
+});
+
+test("replay on start does not announce old questions", () => {
+  const dir = tmpDir();
+  const spool = path.join(dir, "events.ndjson");
+  fs.writeFileSync(spool, JSON.stringify(line({ event: "Notification", session_id: "old", message: "?" }, A)) + "\n");
+  const t = new SessionTracker({ appendLine: () => undefined }, () => ({ spoolPath: spool, staleAfterMs: 60_000 }));
+  const fired: string[] = [];
+  t.onDidStartWaiting((s) => fired.push(s.id));
+  t.setRoots([root(A)]);
+  t.start();
+  t.stop();
+  assert.equal(t.get("old")?.status, "waiting");
+  assert.deepEqual(fired, []);
+});
+
+test("waiting() lists longest-waiting first", () => {
+  const h = harness([A]);
+  h.emit(
+    { event: "Notification", session_id: "recent", message: "?", ts: ago(60_000) },
+    { event: "Notification", session_id: "longest", message: "?", ts: ago(10 * 60_000) },
+    { event: "Stop", session_id: "done" }
+  );
+  assert.deepEqual(h.tracker.waiting().map((s) => s.id), ["longest", "recent"]);
+});

@@ -40,6 +40,8 @@ export interface Session {
   currentToolHint?: string;
   /** Last Notification message, e.g. the question the agent is asking. */
   lastMessage?: string;
+  /** When the session entered "waiting" (cleared when it leaves that state). */
+  waitingSince?: number;
   /** Terminal id set by the extension when it spawned the session. */
   terminalId?: string;
   transcriptPath?: string;

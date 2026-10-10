@@ -39,6 +39,11 @@ export class SessionTracker {
   private readonly sessions = new Map<string, Session>();
   private readonly _onDidChange = new Emitter<void>();
   readonly onDidChange = this._onDidChange.event;
+  private readonly _onDidStartWaiting = new Emitter<Session>();
+  /** A session started waiting for the user. Live events only, never during the replay on start. */
+  readonly onDidStartWaiting = this._onDidStartWaiting.event;
+  private replaying = false;
+  private startedWaiting: Session[] = [];
 
   private offset = 0;
   private partial = "";
@@ -88,7 +93,12 @@ export class SessionTracker {
     }
     this.offset = Math.max(0, size - REPLAY_TAIL_BYTES);
     this.skipFirstLine = this.offset > 0;
-    this.readNew(); // replay history so restarts keep state
+    this.replaying = true;
+    try {
+      this.readNew(); // replay history so restarts keep state
+    } finally {
+      this.replaying = false;
+    }
     this.prune();
     this.fire();
     try {
@@ -111,6 +121,7 @@ export class SessionTracker {
   dispose(): void {
     this.stop();
     this._onDidChange.dispose();
+    this._onDidStartWaiting.dispose();
   }
 
   all(): Session[] {
@@ -219,6 +230,9 @@ export class SessionTracker {
         }
       }
       if (changed) this.fire();
+      const started = this.startedWaiting;
+      this.startedWaiting = [];
+      for (const s of started) if (this.sessions.get(s.id)?.status === "waiting") this._onDidStartWaiting.fire({ ...s });
     } finally {
       fs.closeSync(fd);
     }
@@ -251,6 +265,7 @@ export class SessionTracker {
     if (ev.transcript_path) s.transcriptPath = ev.transcript_path;
     s.lastEventAt = Math.max(s.lastEventAt, ts);
     s.lastEvent = ev.event;
+    const wasWaiting = s.status === "waiting";
 
     switch (ev.event) {
       case "SessionStart":
@@ -295,8 +310,20 @@ export class SessionTracker {
       default:
         break;
     }
+    if (s.status !== "waiting") s.waitingSince = undefined;
+    else if (!wasWaiting) {
+      s.waitingSince = ts;
+      if (!this.replaying) this.startedWaiting.push(s);
+    }
     this.loadTitle(s);
     return true;
+  }
+
+  /** Waiting sessions, longest-waiting first. */
+  waiting(): Session[] {
+    return this.all()
+      .filter((s) => s.status === "waiting")
+      .sort((a, b) => (a.waitingSince ?? a.lastEventAt) - (b.waitingSince ?? b.lastEventAt));
   }
 
   private loadTitle(s: Session): void {

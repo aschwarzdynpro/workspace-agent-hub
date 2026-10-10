@@ -14,6 +14,7 @@ export interface HubConfig {
   spoolPath: string;
   claudeHome: string;
   staleAfterMs: number;
+  notifyWhenWaiting: boolean;
 }
 
 export function getConfig(): HubConfig {
@@ -27,6 +28,7 @@ export function getConfig(): HubConfig {
     spoolPath: expandHome(c.get<string>("spoolPath", "~/.claude/hub/events.ndjson")),
     claudeHome: expandHome(c.get<string>("claudeHome", "~/.claude")),
     staleAfterMs: Math.max(1, c.get<number>("staleAfterMinutes", 30)) * 60_000,
+    notifyWhenWaiting: c.get<boolean>("notifyWhenWaiting", true),
   };
 }
 
