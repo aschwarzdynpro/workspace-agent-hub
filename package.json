@@ -328,19 +328,6 @@
           "default": true,
           "description": "Treat every folder of the open (multi-root) workspace as a root."
         },
-        "agentHub.launchMode": {
-          "type": "string",
-          "enum": [
-            "terminal",
-            "chat"
-          ],
-          "enumDescriptions": [
-            "Spawn `claude` in an integrated terminal whose cwd is the root (default, fully supported).",
-            "Open the Anthropic Claude Code chat panel for the root (requires `agentHub.chatCommandId`)."
-          ],
-          "default": "terminal",
-          "description": "How new sessions are started."
-        },
         "agentHub.claudeCommand": {
           "type": "string",
           "default": "claude",
@@ -353,11 +340,6 @@
           },
           "default": [],
           "description": "Extra CLI arguments appended to every `claude` invocation (e.g. `--model`, `--permission-mode`)."
-        },
-        "agentHub.chatCommandId": {
-          "type": "string",
-          "default": "",
-          "markdownDescription": "Command id of the Anthropic Claude Code extension used to open a chat session. Leave empty until verified from that extension's `package.json` (see `SPEC.md`)."
         },
         "agentHub.spoolPath": {
           "type": "string",

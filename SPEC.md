@@ -122,7 +122,7 @@ das Angebot „Save Workspace As…“ wird deshalb in `globalState` gemerkt und
 
 ## Launch
 
-- `launchMode: terminal` (Default): `vscode.window.createTerminal({ cwd: root.path, env })`,
+- Start immer im Terminal: `vscode.window.createTerminal({ cwd: root.path, env })`,
   dann `claude [extraArgs] [--resume <id>]`. Die Env-Variablen `AGENT_HUB_TERMINAL` (UUID) und
   `AGENT_HUB_ROOT` werden vom Hook-Skript in jedes Event geschrieben → eindeutige Zuordnung
   Terminal ↔ Session, unabhängig von cwd-Wechseln. Nach einem Reload liest der Launcher die ID aus
@@ -130,9 +130,10 @@ das Angebot „Save Workspace As…“ wird deshalb in `globalState` gemerkt und
   Sessions: das einzige offene Nicht-Hub-Terminal, dessen Name „claude“ enthält, mit cwd = Session-cwd;
   mehrdeutig → keins. Hub-Terminals matchen nie per cwd (nach `/exit` sind sie nur noch eine Shell).
 - Resume einer Session, die noch in einem Hub-Terminal läuft, fokussiert dieses statt sie doppelt zu starten.
-- `launchMode: chat`: ruft `agentHub.chatCommandId` der Anthropic-Extension auf; wenn leer oder
-  Fehler → Terminal-Fallback mit Hinweis. Status-Tracking funktioniert für Chat-Sessions
-  identisch, weil Hooks und Transkripte dieselben sind.
+- Kein Start aus dem Hub in den Chat der Anthropic-Extension: Der Chat läuft immer im ersten Ordner
+  des Fensters und bekommt kein `env`/`envFile` eines Roots (siehe Offene Punkte 4). Im Chat
+  gestartete Sessions werden trotzdem angezeigt, weil Hooks und Transkripte dieselben sind; ein Klick
+  bietet Resume im Terminal oder das Transkript an.
 
 ## Hooks
 
@@ -159,10 +160,8 @@ Sessions lesen Hooks erst nach Neustart.
 |---|---|---|
 | `agentHub.roots` | `[]` | Roots `{path, name?, kind?, env?, envFile?, extraArgs?, color?}`; ein Eintrag mit dem Pfad eines Workspace-Ordners ergänzt dessen Optionen |
 | `agentHub.includeWorkspaceFolders` | `true` | Workspace-Ordner als Roots |
-| `agentHub.launchMode` | `terminal` | `terminal` \| `chat` |
 | `agentHub.claudeCommand` | `claude` | Executable |
 | `agentHub.extraArgs` | `[]` | z. B. `["--model","opus"]` |
-| `agentHub.chatCommandId` | `""` | Command-ID der Anthropic-Extension |
 | `agentHub.spoolPath` | `~/.claude/hub/events.ndjson` | Spool |
 | `agentHub.claudeHome` | `~/.claude` | Claude-Home |
 | `agentHub.staleAfterMinutes` | `30` | Idle-Schwelle |
@@ -189,9 +188,11 @@ Der Hook schreibt dafür die *Namen* der Payload-Felder mit (`keys`), keine Inha
    Notification mehr: Der Hub wertet schon das `PreToolUse` als waiting. Offen bleibt, wie
    `permission_prompt` tatsächlich aussieht. Prüfen: eine Session im Default-Permission-Modus, die
    ein nicht freigegebenes Bash-Kommando ausführen will, dann Diagnose.
-4. **Chat-Command-IDs**: `cat ~/.vscode/extensions/anthropic.claude-code-*/package.json | jq
-   '.contributes.commands'` → passende ID in `agentHub.chatCommandId`; prüfen, ob cwd/Resume-ID
-   übergeben werden können.
+4. **Chat-Command-IDs**: Kann der Hub den Chat der Anthropic-Extension für einen Root öffnen?
+   ❌ Nein, deshalb verworfen (2026-10-10, anthropic.claude-code 2.1.296).
+   `claude-vscode.editor.open(sessionId?, …)` nimmt eine Session-ID, aber kein cwd. Der Chat läuft
+   immer in `workspaceFolders[0]` und mit dem Environment von VS Code. Für jeden anderen Root wäre die
+   Isolation verletzt. Neu prüfen, falls die Extension ein cwd-Argument bekommt.
 5. **Windows**: Pfad-Quoting im Hook-Command (`node "C:\…\hub-event.js"`) und `fs.watch` auf
    NTFS; Polling-Fallback ist aktiv.
    ✅ Quoting funktioniert: Der Spool füllt sich unter Windows 11 aus Sessions in mehreren Roots.

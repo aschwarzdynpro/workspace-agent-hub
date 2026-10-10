@@ -69,9 +69,9 @@ export class ConnectionTree implements vscode.TreeDataProvider<Line> {
         ok: projectCount > 0 ? true : null,
       },
       {
-        label: `Launch mode: ${cfg.launchMode}`,
-        description: cfg.launchMode === "chat" && !cfg.chatCommandId ? "chatCommandId missing → terminal fallback" : cfg.claudeCommand,
-        ok: cfg.launchMode === "terminal" || !!cfg.chatCommandId ? true : false,
+        label: "Launch",
+        description: `terminal · ${cfg.claudeCommand}`,
+        ok: true,
       },
       {
         label: "Run diagnostics",

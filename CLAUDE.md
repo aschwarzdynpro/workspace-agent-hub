@@ -19,7 +19,7 @@ isolated workspaces. Each agent only ever sees its own root (cwd); the hub never
 | `src/sessionTracker.ts` | tails the NDJSON spool, session state machine (pure, no `vscode` import) |
 | `src/paths.ts`, `src/emitter.ts` | vscode-free helpers so pure modules stay testable |
 | `src/claudeProjects.ts` | reads `~/.claude/projects/<encoded cwd>/*.jsonl` transcripts |
-| `src/launcher.ts` | spawns `claude` terminals with cwd = root; chat-mode delegation |
+| `src/launcher.ts` | spawns `claude` terminals with cwd = root |
 | `src/hookInstaller.ts` | merges our hooks into `~/.claude/settings.json` (idempotent, with backup) |
 | `src/workspaceTree.ts` | TreeDataProvider for the sidebar |
 | `src/connectionTree.ts` | small health view (hooks / spool / transcripts) |
@@ -45,7 +45,7 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 - `SessionTracker` and `claudeProjects` must not import `vscode` (directly or via `config.ts`); `npm test` runs them under plain Node.
 - The hook script must never throw, never print to stdout, and always `exit(0)`.
 - Any assumption about Claude Code internals (project dir encoding, hook payload fields,
-  chat command ids) goes into `SPEC.md › Open questions` with how to verify it.
+  transcript fields) goes into `SPEC.md › Open questions` with how to verify it.
 - UI strings in English; comments in English. User-facing docs may be German.
 - Commit messages: imperative, one line, optional body.
 
@@ -54,7 +54,7 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 1. [x] Scaffold: package.json contributions, tree, launcher, hooks, overview, status bar
 2. [ ] Verify on a real machine: run *Agent Hub: Diagnose* (covers encoding, payload fields, `Notification` types, terminal revival) → fix `SPEC.md`
 3. [x] Terminal ↔ session mapping robustness (`AGENT_HUB_TERMINAL` env is the primary key; fall back to cwd)
-4. [ ] Chat mode: read command ids from the installed `anthropic.claude-code` extension and wire `agentHub.chatCommandId`
+4. [–] ~~Chat mode~~ — dropped: the Claude Code chat always runs in the window's first folder (SPEC › Open questions 4)
 5. [x] "Answer" action: focus terminal and, if the session waits for permission, show the pending question in the tree
 6. [ ] Coordinator root: generated `CLAUDE.md` that reads the spool via a tiny MCP server or `cat` and nothing else
 7. [ ] Context usage per session from transcript token counts (last `usage` block of the JSONL)

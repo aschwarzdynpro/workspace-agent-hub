@@ -175,7 +175,7 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand("agentHub.focusSession", async (node?: Node) => {
       if (node?.kind !== "session") return;
       if (launcher.focus(node.session)) return;
-      // Not in a terminal of this window (external terminal, chat panel): offer resume.
+      // Not in a hub terminal of this window (external terminal, Claude Code chat panel): offer resume.
       const question = node.session.status === "waiting" && node.session.lastMessage ? ` It asks: "${node.session.lastMessage}"` : "";
       const actions = node.root ? ["Resume in new terminal", "Open transcript"] : ["Open transcript"];
       const choice = await vscode.window.showInformationMessage(

@@ -34,13 +34,6 @@ export class Launcher implements vscode.Disposable {
   }
 
   async newSession(root: Root): Promise<void> {
-    const cfg = getConfig();
-    if (cfg.launchMode === "chat") {
-      if (await this.openChat(root)) return;
-      void vscode.window.showWarningMessage(
-        "Agent Hub: chat launch not configured (agentHub.chatCommandId). Falling back to terminal."
-      );
-    }
     await this.spawn(root, []);
   }
 
@@ -124,26 +117,6 @@ export class Launcher implements vscode.Disposable {
     this.log.appendLine(`[${root.name}] ${cmd}`);
     terminal.show(false);
     terminal.sendText(cmd, true);
-  }
-
-  /**
-   * Chat mode: delegate to the Anthropic Claude Code extension.
-   * The command id is deliberately a setting: it has to be read from that
-   * extension's package.json (see SPEC.md → "Open questions") and may change.
-   */
-  private async openChat(root: Root): Promise<boolean> {
-    const cfg = getConfig();
-    if (!cfg.chatCommandId) return false;
-    try {
-      // Focus a file inside the root first so the extension picks that workspace folder.
-      const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(root.path));
-      if (folder) await vscode.commands.executeCommand("workbench.view.explorer");
-      await vscode.commands.executeCommand(cfg.chatCommandId);
-      return true;
-    } catch (e) {
-      this.log.appendLine(`chat launch failed: ${String(e)}`);
-      return false;
-    }
   }
 }
 
