@@ -15,7 +15,11 @@ export class Launcher implements vscode.Disposable {
   constructor(private readonly tracker: SessionTracker, private readonly log: vscode.OutputChannel) {
     this.subs.push(
       vscode.window.onDidCloseTerminal((t) => {
-        for (const [id, term] of this.terminals) if (term === t) this.terminals.delete(id);
+        for (const [id, term] of this.terminals) {
+          if (term !== t) continue;
+          this.terminals.delete(id);
+          this.tracker.terminalClosed(id);
+        }
       })
     );
   }

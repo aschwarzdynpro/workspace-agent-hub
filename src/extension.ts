@@ -137,8 +137,9 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
-  // Periodic refresh so relative times ("3 min ago") and idle detection stay current.
-  const tick = setInterval(() => tree.refresh(), 30_000);
+  // Periodic refresh so relative times ("3 min ago") and idle detection stay current
+  // in every view (tree, badge, status bar, overview).
+  const tick = setInterval(() => tracker.tick(), 30_000);
   context.subscriptions.push({ dispose: () => clearInterval(tick) });
 
   updateBadge();

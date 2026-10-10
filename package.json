@@ -166,7 +166,7 @@
         },
         {
           "command": "agentHub.resumeSession",
-          "when": "view == agentHub.workspaces && viewItem == session-ended",
+          "when": "view == agentHub.workspaces && viewItem == transcript",
           "group": "inline@2"
         },
         {
