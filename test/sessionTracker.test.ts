@@ -253,6 +253,28 @@ test("PostToolUse clears the finished tool, so a later question does not show it
   assert.equal(h.tracker.get("s")?.currentTool, "Bash");
 });
 
+test("AskUserQuestion and ExitPlanMode wait for the user until their PostToolUse", () => {
+  const h = harness([A]);
+  const started: string[] = [];
+  h.tracker.onDidStartWaiting((s) => started.push(s.lastMessage ?? ""));
+  h.emit({ event: "PreToolUse", session_id: "s", tool_name: "AskUserQuestion", tool_hint: "Which tenant?" });
+  assert.equal(h.tracker.get("s")?.status, "waiting");
+  assert.equal(h.tracker.get("s")?.lastMessage, "Which tenant?");
+  assert.equal(h.tracker.get("s")?.currentTool, undefined);
+  h.emit({ event: "PostToolUse", session_id: "s", tool_name: "AskUserQuestion" });
+  assert.equal(h.tracker.get("s")?.status, "working");
+  assert.equal(h.tracker.get("s")?.lastMessage, undefined);
+  h.emit({ event: "PreToolUse", session_id: "s", tool_name: "ExitPlanMode" });
+  assert.equal(h.tracker.get("s")?.lastMessage, "Plan ready for your approval");
+  assert.deepEqual(started, ["Which tenant?", "Plan ready for your approval"]);
+});
+
+test("a tool named like an Object.prototype member is just a tool", () => {
+  const h = harness([A]);
+  h.emit({ event: "PreToolUse", session_id: "s", tool_name: "constructor" });
+  assert.equal(h.tracker.get("s")?.status, "working");
+});
+
 test("sortByAttention puts roots with waiting sessions first, then working, then by name", () => {
   const C = path.resolve("/work/c");
   const D = path.resolve("/work/d");

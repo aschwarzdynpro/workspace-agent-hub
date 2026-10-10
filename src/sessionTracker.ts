@@ -23,6 +23,14 @@ import { Root, Session, SessionStatus, SpoolEvent } from "./types";
  * Ended sessions and sessions silent for PRUNE_AFTER_MS are dropped on the next tick.
  */
 const PRUNE_AFTER_MS = 24 * 60 * 60_000;
+/**
+ * Tools that block until the user answers in the terminal. No Notification is guaranteed for
+ * them, so the PreToolUse itself means "waiting"; the PostToolUse after the answer clears it.
+ */
+const QUESTION_TOOLS = new Map([
+  ["AskUserQuestion", "Claude asks a question"],
+  ["ExitPlanMode", "Plan ready for your approval"],
+]);
 /** On start only the tail of the spool is replayed; older events cannot matter after pruning anyway. */
 const REPLAY_TAIL_BYTES = 8 * 1024 * 1024;
 
@@ -285,16 +293,27 @@ export class SessionTracker {
         s.lastMessage = undefined;
         if (ev.prompt && (!s.title || s.turns === 1)) s.title = compact(ev.prompt);
         break;
-      case "PreToolUse":
+      case "PreToolUse": {
+        const question = ev.tool_name ? QUESTION_TOOLS.get(ev.tool_name) : undefined;
+        if (question) {
+          s.status = "waiting";
+          s.lastMessage = ev.tool_hint || question;
+          s.currentTool = undefined;
+          s.currentToolHint = undefined;
+          break;
+        }
         s.status = "working";
         s.currentTool = ev.tool_name ?? undefined;
         s.currentToolHint = ev.tool_hint ?? undefined;
         break;
+      }
       case "PostToolUse":
-        // The tool finished: don't keep showing it (e.g. under a later permission question).
+        // The tool finished: don't keep showing it (e.g. under a later permission question),
+        // and any question about it or asked by it has been answered.
         s.status = "working";
         s.currentTool = undefined;
         s.currentToolHint = undefined;
+        s.lastMessage = undefined;
         break;
       case "Notification":
         // idle_prompt fires ~60 s after Stop and auth_success is informational: neither is a
