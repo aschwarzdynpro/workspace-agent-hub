@@ -7,10 +7,8 @@ export { expandHome, normalizePath };
 
 export interface HubConfig {
   includeWorkspaceFolders: boolean;
-  launchMode: "terminal" | "chat";
   claudeCommand: string;
   extraArgs: string[];
-  chatCommandId: string;
   spoolPath: string;
   claudeHome: string;
   staleAfterMs: number;
@@ -22,10 +20,8 @@ export function getConfig(): HubConfig {
   const c = vscode.workspace.getConfiguration("agentHub");
   return {
     includeWorkspaceFolders: c.get<boolean>("includeWorkspaceFolders", true),
-    launchMode: c.get<"terminal" | "chat">("launchMode", "terminal"),
     claudeCommand: c.get<string>("claudeCommand", "claude"),
     extraArgs: c.get<string[]>("extraArgs", []),
-    chatCommandId: c.get<string>("chatCommandId", ""),
     spoolPath: expandHome(c.get<string>("spoolPath", "~/.claude/hub/events.ndjson")),
     claudeHome: expandHome(c.get<string>("claudeHome", "~/.claude")),
     staleAfterMs: Math.max(1, c.get<number>("staleAfterMinutes", 30)) * 60_000,
