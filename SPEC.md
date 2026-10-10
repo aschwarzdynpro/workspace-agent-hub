@@ -65,7 +65,8 @@ Session, wenn eine wartet, sonst Overview.
 |---|---|---|
 | SessionStart | done | Titel aus Transkript laden |
 | UserPromptSubmit | working | turns++, Titel beim ersten Prompt setzen |
-| PreToolUse / PostToolUse | working | currentTool, currentToolHint |
+| PreToolUse / PostToolUse | working | currentTool, currentToolHint; PostToolUse löscht lastMessage |
+| PreToolUse `AskUserQuestion` / `ExitPlanMode` | waiting | lastMessage = erste Frage bzw. „Plan ready for your approval“; das PostToolUse nach der Antwort setzt working |
 | Notification | waiting | lastMessage (Frage/Permission); `idle_prompt`/`auth_success` ändern den Status nicht |
 | Stop | done | currentTool löschen |
 | SessionEnd | ended | wird aus dem Tree entfernt |
@@ -157,17 +158,27 @@ Sessions lesen Hooks erst nach Neustart.
 Der Hook schreibt dafür die *Namen* der Payload-Felder mit (`keys`), keine Inhalte.
 
 1. **Projektverzeichnis-Encoding** in `~/.claude/projects/`: Annahme `[^A-Za-z0-9] → -`.
-   Prüfen: `ls ~/.claude/projects` neben einem bekannten Pfad; ggf. `encodeProjectDir()` anpassen.
+   ✅ Bestätigt am 2026-10-10 (Windows 11, 48 Projektordner). Einzige Abweichung: Den Laufwerksbuchstaben
+   übernimmt Claude Code so, wie VS Code ihn liefert (`c--…` oder `C--…`). Unter NTFS ist das egal;
+   die Diagnose vergleicht unter Windows deshalb ohne Groß-/Kleinschreibung.
 2. **Hook-Payload-Felder**: `session_id`, `transcript_path`, `cwd`, `hook_event_name`,
    `tool_name`, `tool_input`, `message`, `notification_type`, `prompt`, `source`, `reason`.
-   Prüfen: Spool nach einer kurzen Session ansehen; fehlende Felder im Skript ergänzen.
+   ✅ Alle vorhanden (2026-10-10). Zusätzlich gesehen: `SessionStart` liefert `model` und
+   `context_tokens` (interessant für Punkt 7), `Stop` liefert `last_assistant_message`, alle
+   Events `prompt_id` und `permission_mode`.
 3. **Notification-Typen**: welche Werte kommen (`permission_prompt`, `idle_prompt`, …) und ob
    eine gestellte Frage (AskUserQuestion) als Notification oder nur via Transkript sichtbar ist.
+   ⏳ Bisher nur `idle_prompt` gesehen. `AskUserQuestion` und `ExitPlanMode` brauchen keine
+   Notification mehr: Der Hub wertet schon das `PreToolUse` als waiting. Offen bleibt, wie
+   `permission_prompt` tatsächlich aussieht. Prüfen: eine Session im Default-Permission-Modus, die
+   ein nicht freigegebenes Bash-Kommando ausführen will, dann Diagnose.
 4. **Chat-Command-IDs**: `cat ~/.vscode/extensions/anthropic.claude-code-*/package.json | jq
    '.contributes.commands'` → passende ID in `agentHub.chatCommandId`; prüfen, ob cwd/Resume-ID
    übergeben werden können.
 5. **Windows**: Pfad-Quoting im Hook-Command (`node "C:\…\hub-event.js"`) und `fs.watch` auf
    NTFS; Polling-Fallback ist aktiv.
+   ✅ Quoting funktioniert: Der Spool füllt sich unter Windows 11 aus Sessions in mehreren Roots.
+   Nicht separat geprüft ist, ob `fs.watch` allein feuert; das Polling deckt es ab.
 6. **Terminal-Wiederherstellung**: Behalten von VS Code nach einem Reload wiederbelebte Terminals
    `creationOptions.env.AGENT_HUB_TERMINAL`? Und zeigt `Terminal.name` für ein von Hand gestartetes
    `claude` „claude“ (Fallback-Zuordnung über cwd)? Prüfen: Hub-Session starten, Fenster neu laden,

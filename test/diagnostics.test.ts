@@ -51,3 +51,14 @@ test("diagnostics without any Claude data explains what to do", () => {
   assert.match(md, /No events in/);
   assert.match(md, /\| \(none\) \| \|/);
 });
+
+test("diagnostics: on Windows a drive letter in another case still matches the encoding", () => {
+  const home = tmpDir();
+  const cwd = path.join(tmpDir(), "Drive_Root");
+  const dir = encodeProjectDir(cwd).toLowerCase();
+  fs.mkdirSync(path.join(home, "projects", dir), { recursive: true });
+  fs.writeFileSync(path.join(home, "projects", dir, "s.jsonl"), JSON.stringify({ type: "user", cwd, message: { role: "user", content: "hi" } }) + "\n");
+  const input = { claudeHome: home, spoolPath: path.join(home, "none.ndjson"), roots: [], hooksInstalled: true, terminals: [] };
+  assert.match(buildDiagnostics({ ...input, platform: "win32" }), /\*\*1 match\*\*/);
+  assert.match(buildDiagnostics({ ...input, platform: "linux" }), /\*\*1 mismatch\*\*/);
+});

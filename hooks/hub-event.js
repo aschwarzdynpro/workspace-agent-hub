@@ -83,6 +83,10 @@ readStdin((raw) => {
 
 function toolHint(input) {
   if (!input || typeof input !== "object") return null;
+  // AskUserQuestion: the first question is what the user has to answer.
+  if (Array.isArray(input.questions) && input.questions[0] && typeof input.questions[0].question === "string") {
+    return input.questions[0].question.slice(0, 160);
+  }
   for (const key of ["file_path", "path", "command", "pattern", "query", "url", "description"]) {
     const v = input[key];
     if (typeof v === "string" && v.trim()) return v.slice(0, 160);

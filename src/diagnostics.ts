@@ -57,7 +57,9 @@ export function buildDiagnostics(input: DiagnosticsInput): string {
         continue;
       }
       const expected = encodeProjectDir(cwd);
-      if (expected === d) ok++;
+      // NTFS is case-insensitive: Claude Code keeps the drive letter as VS Code passes it (c: or C:).
+      const same = (input.platform ?? process.platform) === "win32" ? expected.toLowerCase() === d.toLowerCase() : expected === d;
+      if (same) ok++;
       else mismatches.push(`| \`${cwd}\` | \`${d}\` | \`${expected}\` |`);
     }
     add(`${dirs.length} project dirs: **${ok} match** \`encodeProjectDir()\`, **${mismatches.length} mismatch**, ${unknown} without a readable cwd.`, "");
