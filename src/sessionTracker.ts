@@ -1,14 +1,14 @@
 import * as fs from "fs";
 import * as path from "path";
 import { StringDecoder } from "string_decoder";
-import * as vscode from "vscode";
 import { compact, readTranscriptTitle } from "./claudeProjects";
-import { getConfig, normalizePath } from "./config";
+import { Emitter } from "./emitter";
+import { normalizePath } from "./paths";
 import { Root, Session, SessionStatus, SpoolEvent } from "./types";
 
 /**
  * Tails the NDJSON spool written by hooks/hub-event.js and keeps an in-memory
- * session table. Pure state machine; no VS Code UI in here.
+ * session table. Pure state machine: no `vscode` import, so it runs under plain Node tests.
  *
  * Status transitions (per session):
  *   SessionStart            → done   (ready for a prompt)
@@ -26,9 +26,18 @@ const PRUNE_AFTER_MS = 24 * 60 * 60_000;
 /** On start only the tail of the spool is replayed; older events cannot matter after pruning anyway. */
 const REPLAY_TAIL_BYTES = 8 * 1024 * 1024;
 
-export class SessionTracker implements vscode.Disposable {
+export interface TrackerSettings {
+  spoolPath: string;
+  staleAfterMs: number;
+}
+
+export interface TrackerLog {
+  appendLine(line: string): void;
+}
+
+export class SessionTracker {
   private readonly sessions = new Map<string, Session>();
-  private readonly _onDidChange = new vscode.EventEmitter<void>();
+  private readonly _onDidChange = new Emitter<void>();
   readonly onDidChange = this._onDidChange.event;
 
   private offset = 0;
@@ -44,7 +53,10 @@ export class SessionTracker implements vscode.Disposable {
   private spool = "";
   private debounce?: NodeJS.Timeout;
 
-  constructor(private readonly log: vscode.OutputChannel) {}
+  constructor(
+    private readonly log: TrackerLog,
+    private readonly settings: () => TrackerSettings
+  ) {}
 
   setRoots(roots: Root[]): void {
     this.roots = roots;
@@ -57,7 +69,7 @@ export class SessionTracker implements vscode.Disposable {
 
   start(): void {
     this.stop();
-    this.spool = getConfig().spoolPath;
+    this.spool = this.settings().spoolPath;
     this.partial = "";
     this.decoder = new StringDecoder("utf8");
     this.sessions.clear();
@@ -103,7 +115,7 @@ export class SessionTracker implements vscode.Disposable {
 
   all(): Session[] {
     const now = Date.now();
-    const stale = getConfig().staleAfterMs;
+    const stale = this.settings().staleAfterMs;
     return [...this.sessions.values()].map((s) => {
       if ((s.status === "done" || s.status === "working") && now - s.lastEventAt > stale) {
         return { ...s, status: "idle" as SessionStatus };
@@ -316,7 +328,7 @@ export class SessionTracker implements vscode.Disposable {
   }
 
   private fire(): void {
-    this._onDidChange.fire();
+    this._onDidChange.fire(undefined);
   }
 }
 

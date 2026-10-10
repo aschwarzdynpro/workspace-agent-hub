@@ -8,7 +8,7 @@ isolated workspaces. Each agent only ever sees its own root (cwd); the hub never
 
 - TypeScript, VS Code Extension API (`engines.vscode ^1.105`), bundled with esbuild → `dist/extension.js`
 - No runtime dependencies. Node ≥ 20 on the dev machine (`hooks/hub-event.js` runs under the user's Node).
-- `npm run build` (bundle), `npm run typecheck` (tsc), `npm run watch`, F5 → Extension Development Host.
+- `npm run build` (bundle), `npm run typecheck` (tsc), `npm test` (node:test via esbuild), `npm run watch`, F5 → Extension Development Host.
 
 ## Layout
 
@@ -16,7 +16,8 @@ isolated workspaces. Each agent only ever sees its own root (cwd); the hub never
 |---|---|
 | `src/extension.ts` | activation, command registration, wiring |
 | `src/config.ts` | settings + root discovery (workspace folders ∪ `agentHub.roots`) |
-| `src/sessionTracker.ts` | tails the NDJSON spool, session state machine (pure, no UI) |
+| `src/sessionTracker.ts` | tails the NDJSON spool, session state machine (pure, no `vscode` import) |
+| `src/paths.ts`, `src/emitter.ts` | vscode-free helpers so pure modules stay testable |
 | `src/claudeProjects.ts` | reads `~/.claude/projects/<encoded cwd>/*.jsonl` transcripts |
 | `src/launcher.ts` | spawns `claude` terminals with cwd = root; chat-mode delegation |
 | `src/hookInstaller.ts` | merges our hooks into `~/.claude/settings.json` (idempotent, with backup) |
@@ -25,6 +26,7 @@ isolated workspaces. Each agent only ever sees its own root (cwd); the hub never
 | `src/overviewPanel.ts` + `media/` | read-only webview overview |
 | `src/statusBar.ts` | status bar counter |
 | `hooks/hub-event.js` | the Claude Code hook: stdin JSON → one NDJSON line, exit 0 always |
+| `test/*.test.ts` | unit tests (`npm test`); `scripts/test.mjs` bundles and runs them |
 
 ## Data flow
 
@@ -38,7 +40,7 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 
 ## Conventions
 
-- Keep `SessionTracker` free of `vscode.window` calls; it must stay unit-testable.
+- `SessionTracker` and `claudeProjects` must not import `vscode` (directly or via `config.ts`); `npm test` runs them under plain Node.
 - The hook script must never throw, never print to stdout, and always `exit(0)`.
 - Any assumption about Claude Code internals (project dir encoding, hook payload fields,
   chat command ids) goes into `SPEC.md › Open questions` with how to verify it.
@@ -54,5 +56,5 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 5. [ ] "Answer" action: focus terminal and, if the session waits for permission, show the pending question in the tree
 6. [ ] Coordinator root: generated `CLAUDE.md` that reads the spool via a tiny MCP server or `cat` and nothing else
 7. [ ] Context usage per session from transcript token counts (last `usage` block of the JSONL)
-8. [ ] Tests for `SessionTracker` (feed NDJSON fixtures) and `claudeProjects` (fixture transcripts)
+8. [x] Tests for `SessionTracker` (feed NDJSON fixtures) and `claudeProjects` (fixture transcripts)
 9. [ ] Marketplace packaging (`vsce package`), icon, screenshots

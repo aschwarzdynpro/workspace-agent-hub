@@ -283,8 +283,8 @@
     "build": "node esbuild.mjs",
     "watch": "node esbuild.mjs --watch",
     "typecheck": "tsc --noEmit",
-    "lint": "tsc --noEmit",
-    "package": "vsce package"
+    "package": "vsce package",
+    "test": "node scripts/test.mjs"
   },
   "devDependencies": {
     "@types/node": "^22.0.0",

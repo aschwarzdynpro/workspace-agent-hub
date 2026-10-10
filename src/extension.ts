@@ -12,7 +12,7 @@ import { Node, WorkspaceTree, relTime } from "./workspaceTree";
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel("Agent Hub");
-  const tracker = new SessionTracker(log);
+  const tracker = new SessionTracker(log, getConfig);
   const tree = new WorkspaceTree(tracker);
   const connection = new ConnectionTree(context);
   const launcher = new Launcher(tracker, log);
