@@ -4,6 +4,7 @@ import * as path from "path";
 import * as vscode from "vscode";
 import { listTranscripts, WrittenFile, WrittenFilesIndex } from "./claudeProjects";
 import { getConfig, getRoots, normalizePath } from "./config";
+import { excludedNames, listDir } from "./dirListing";
 import { age, fileFolder, relTime, statusLabel } from "./format";
 import { SessionTracker } from "./sessionTracker";
 import { Root, Session, SessionStatus, TranscriptInfo } from "./types";
@@ -13,7 +14,7 @@ const TRANSCRIPT_CACHE_MS = 15_000;
 /** Files listed under one session; older writes stay reachable through the Explorer. */
 const MAX_FILES = 15;
 
-export type Node = RootNode | SessionNode | DetailNode | TranscriptNode | FileNode;
+export type Node = RootNode | SessionNode | DetailNode | TranscriptNode | FileNode | DirNode;
 
 export interface RootNode {
   kind: "root";
@@ -41,7 +42,15 @@ export interface FileNode {
   kind: "file";
   root: Root;
   path: string;
+  /** When a session wrote it; 0 for files from the folder listing. */
   at: number;
+}
+/** A folder of the root's file tree; `top` is the root's own "Files" node. */
+export interface DirNode {
+  kind: "dir";
+  root: Root;
+  path: string;
+  top?: boolean;
 }
 
 export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
@@ -94,6 +103,8 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
       }
       case "file":
         return this.fileItem(node);
+      case "dir":
+        return this.dirItem(node);
     }
   }
 
@@ -110,8 +121,10 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
         }
       }
       if (!children.length) children.push({ kind: "detail", text: "No sessions yet — click + to start one", icon: "info" });
+      children.push({ kind: "dir", root: node.root, path: node.root.path, top: true });
       return children;
     }
+    if (node.kind === "dir") return this.dirChildren(node);
     if (node.kind === "session") {
       const s = node.session;
       const out: Node[] = [];
@@ -147,11 +160,35 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
       .map((f) => ({ kind: "file", root, path: f.path, at: f.at }));
   }
 
+  /** One level of the root's folder, like the Explorer; read on expand, so it stays current. */
+  private dirChildren(node: DirNode): Node[] {
+    const exclude = vscode.workspace.getConfiguration("files").get<Record<string, unknown>>("exclude");
+    const { entries, more } = listDir(node.path, excludedNames(exclude));
+    const out: Node[] = entries.map((e) =>
+      e.isDir ? { kind: "dir", root: node.root, path: e.path } : { kind: "file", root: node.root, path: e.path, at: 0 }
+    );
+    if (more) out.push({ kind: "detail", text: `… ${more} more (Reveal in the context menu)`, icon: "ellipsis" });
+    if (!out.length) out.push({ kind: "detail", text: "Empty folder", icon: "info" });
+    return out;
+  }
+
+  private dirItem(node: DirNode): vscode.TreeItem {
+    const item = new vscode.TreeItem(node.top ? "Files" : path.basename(node.path), vscode.TreeItemCollapsibleState.Collapsed);
+    // Stable id per folder keeps it expanded across refreshes (every hook event refreshes the tree).
+    item.id = `dir:${node.root.id}:${normalizePath(node.path)}`;
+    item.resourceUri = vscode.Uri.file(node.path);
+    item.iconPath = node.top ? new vscode.ThemeIcon("files") : vscode.ThemeIcon.Folder;
+    item.tooltip = node.path;
+    item.contextValue = "dir";
+    return item;
+  }
+
   private fileItem(node: FileNode): vscode.TreeItem {
     const item = new vscode.TreeItem(path.basename(node.path), vscode.TreeItemCollapsibleState.None);
     item.resourceUri = vscode.Uri.file(node.path);
     item.iconPath = vscode.ThemeIcon.File;
-    item.description = fileFolder(node.path, node.root.path, os.homedir());
+    // In the folder tree the position already says where the file is.
+    if (node.at) item.description = fileFolder(node.path, node.root.path, os.homedir());
     item.tooltip = `${node.path}${node.at ? `\nWritten ${relTime(node.at)}` : ""}`;
     item.contextValue = isMarkdown(node.path) ? "file-md" : "file";
     item.command = { command: "agentHub.openFile", title: "Open", arguments: [node] };

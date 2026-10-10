@@ -213,7 +213,7 @@ export function activate(context: vscode.ExtensionContext): void {
       if (node?.kind === "file") await vscode.window.showTextDocument(vscode.Uri.file(node.path), { preview: false });
     }),
     vscode.commands.registerCommand("agentHub.revealFile", async (node?: Node) => {
-      if (node?.kind !== "file") return;
+      if (node?.kind !== "file" && node?.kind !== "dir") return;
       const uri = vscode.Uri.file(node.path);
       const inWindow = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
       await vscode.commands.executeCommand(inWindow ? "revealInExplorer" : "revealFileInOS", uri);
