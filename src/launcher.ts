@@ -41,14 +41,14 @@ export class Launcher implements vscode.Disposable {
         "Agent Hub: chat launch not configured (agentHub.chatCommandId). Falling back to terminal."
       );
     }
-    this.spawn(root, []);
+    await this.spawn(root, []);
   }
 
   async resume(root: Root, sessionId: string): Promise<void> {
     // Never run the same session twice: if it is still open in a hub terminal, go there.
     const live = this.tracker.get(sessionId);
     if (live && live.status !== "ended" && this.focus(live)) return;
-    this.spawn(root, ["--resume", sessionId]);
+    await this.spawn(root, ["--resume", sessionId]);
   }
 
   /** Bring the terminal of a running session to the front. */
@@ -60,26 +60,19 @@ export class Launcher implements vscode.Disposable {
   }
 
   /**
-   * 1. `AGENT_HUB_TERMINAL` → hub terminal (exact, survives `cd`).
-   * 2. Fallback for sessions we did not spawn (or whose id was lost): the only unclaimed
-   *    Claude-looking terminal (hub-spawned or named "claude…") whose cwd is the session's cwd.
-   *    Ambiguous → none, rather than a wrong one; a plain shell in the root never matches.
+   * 1. `AGENT_HUB_TERMINAL` → hub terminal (exact, survives `cd` and window reloads via `adopt`).
+   * 2. Fallback for sessions started outside the hub: the only open, non-hub terminal named
+   *    "claude…" whose cwd is the session's cwd. Hub terminals never match here: they are mapped
+   *    by id, and one whose `claude` has exited is just an idle shell. Ambiguous → none.
    */
   terminalFor(session: Session): vscode.Terminal | undefined {
     if (session.terminalId) {
       const t = this.terminals.get(session.terminalId);
       if (t) return t;
     }
-    const claimed = new Set<vscode.Terminal>();
-    for (const s of this.tracker.all()) {
-      if (s.id === session.id || s.status === "ended" || !s.terminalId) continue;
-      const t = this.terminals.get(s.terminalId);
-      if (t) claimed.add(t);
-    }
     const want = normalizePath(session.cwd);
     const candidates = vscode.window.terminals.filter((t) => {
-      if (claimed.has(t)) return false;
-      if (!hubTerminalId(t) && !/claude/i.test(t.name)) return false;
+      if (hubTerminalId(t) || t.exitStatus !== undefined || !/claude/i.test(t.name)) return false;
       const cwd = terminalCwd(t);
       return cwd !== undefined && normalizePath(cwd) === want;
     });
@@ -93,13 +86,23 @@ export class Launcher implements vscode.Disposable {
 
   // ---- internals ------------------------------------------------------------
 
-  private spawn(root: Root, args: string[]): void {
+  private async spawn(root: Root, args: string[]): Promise<void> {
     const cfg = getConfig();
     const terminalId = randomUUID();
     const rootEnv = resolveRootEnv(root);
     if (rootEnv.error) {
+      // Without the root's env the terminal inherits VS Code's environment, which may hold
+      // another customer's tenant or credentials. Never launch silently in that state.
       this.log.appendLine(`[${root.name}] ${rootEnv.error}`);
-      void vscode.window.showWarningMessage(`Agent Hub: ${rootEnv.error}`);
+      const choice = await vscode.window.showWarningMessage(
+        `Agent Hub: ${rootEnv.error}`,
+        {
+          modal: true,
+          detail: `Without it, Claude in "${root.name}" runs with VS Code's own environment, which may belong to another customer.`,
+        },
+        "Launch Anyway"
+      );
+      if (choice !== "Launch Anyway") return;
     }
     const terminal = vscode.window.createTerminal({
       name: `claude · ${root.name}`,

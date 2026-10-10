@@ -52,8 +52,11 @@ Session, wenn eine wartet, sonst Overview.
 - `Agent Hub: Go to Next Session Waiting for Me` (`Ctrl+Alt+W` / `Cmd+Alt+W`, auch als Glocke im
   View-Titel): springt zur am längsten wartenden Session, jeder weitere Aufruf zur nächsten.
 - Benachrichtigung „<Root>: <Frage>“ mit „Show“, sobald eine Session *live* auf `waiting` wechselt
-  (nicht beim Replay nach dem Start). Unterdrückt, wenn das Terminal dieser Session gerade aktiv ist.
-  Abschaltbar über `agentHub.notifyWhenWaiting`.
+  (nicht beim Replay nach dem Start). Immer, auch wenn das Terminal zuletzt aktiv war: VS Code kann
+  nicht erkennen, ob ein Terminal wirklich fokussiert oder sichtbar ist. Abschaltbar über
+  `agentHub.notifyWhenWaiting`.
+- Mit Fokus im Terminal gehen Tastenkürzel von Extensions an die Shell. Beim ersten Sprung fragt der
+  Hub einmal, ob er `agentHub.focusNextWaiting` in `terminal.integrated.commandsToSkipShell` eintragen darf.
 - Tree: wartende Session zeigt „waiting for you · 3 min ago“ und darunter die offene Frage.
 
 ## Status-Maschine (pro Session)
@@ -83,6 +86,11 @@ Agenten bleiben trotzdem isoliert, weil jede Session nur ihr eigenes cwd kennt.
 Pro Root (nur für dessen Terminals): `env`, `envFile` (Dotenv relativ zum Root, für Zugangsdaten
 des Kunden), `extraArgs` (nach den globalen), `color` (Terminal-Tab-Farbe, z. B. `terminal.ansiBlue`).
 Die `AGENT_HUB_*`-Variablen werden immer zuletzt gesetzt und können nicht überschrieben werden.
+Ist das `envFile` nicht lesbar, startet das Terminal erst nach modaler Bestätigung („Launch Anyway“),
+weil es sonst die Umgebung von VS Code erbt, die zu einem anderen Kunden gehören kann.
+
+Wechselt das Fenster dabei in einen Multi-Root-Workspace, startet VS Code den Extension-Host neu;
+das Angebot „Save Workspace As…“ wird deshalb in `globalState` gemerkt und nach dem Neustart gezeigt.
 
 ## Launch
 
@@ -90,8 +98,9 @@ Die `AGENT_HUB_*`-Variablen werden immer zuletzt gesetzt und können nicht über
   dann `claude [extraArgs] [--resume <id>]`. Die Env-Variablen `AGENT_HUB_TERMINAL` (UUID) und
   `AGENT_HUB_ROOT` werden vom Hook-Skript in jedes Event geschrieben → eindeutige Zuordnung
   Terminal ↔ Session, unabhängig von cwd-Wechseln. Nach einem Reload liest der Launcher die ID aus
-  `creationOptions.env` der wiederhergestellten Terminals. Fallback ohne ID: das einzige freie
-  Claude-Terminal (Hub-Terminal oder Name enthält „claude“) mit cwd = Session-cwd; mehrdeutig → keins.
+  `creationOptions.env` der wiederhergestellten Terminals. Fallback für außerhalb des Hubs gestartete
+  Sessions: das einzige offene Nicht-Hub-Terminal, dessen Name „claude“ enthält, mit cwd = Session-cwd;
+  mehrdeutig → keins. Hub-Terminals matchen nie per cwd (nach `/exit` sind sie nur noch eine Shell).
 - Resume einer Session, die noch in einem Hub-Terminal läuft, fokussiert dieses statt sie doppelt zu starten.
 - `launchMode: chat`: ruft `agentHub.chatCommandId` der Anthropic-Extension auf; wenn leer oder
   Fehler → Terminal-Fallback mit Hinweis. Status-Tracking funktioniert für Chat-Sessions

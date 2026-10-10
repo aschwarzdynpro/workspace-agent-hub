@@ -15,6 +15,9 @@ test("parseDotenv handles comments, export, quotes and inline comments", () => {
       "PLAIN=value # trailing comment",
       'MULTI="line1\\nline2"',
       "EMPTY=",
+      'QUOTED_COMMENT="s3cret" # prod',
+      "SINGLE_COMMENT='x y'   # note",
+      'ESCAPED="say \\"hi\\""',
       "not a line",
     ].join("\n")
   );
@@ -25,6 +28,9 @@ test("parseDotenv handles comments, export, quotes and inline comments", () => {
     PLAIN: "value",
     MULTI: "line1\nline2",
     EMPTY: "",
+    QUOTED_COMMENT: "s3cret",
+    SINGLE_COMMENT: "x y",
+    ESCAPED: 'say "hi"',
   });
 });
 

@@ -47,16 +47,58 @@ export function activate(context: vscode.ExtensionContext): void {
     const next = waiting[(waiting.findIndex((s) => s.id === lastJumped) + 1) % waiting.length];
     lastJumped = next.id;
     await openSession(next);
+    await offerShortcutInTerminals();
   };
 
+  // Extension keybindings go to the shell while a terminal has focus — which is exactly where
+  // the user is after the first jump. Ask once to let the shortcut through.
+  const SKIP_SHELL_ASKED = "agentHub.skipShellAsked";
+  const offerShortcutInTerminals = async () => {
+    if (context.globalState.get<boolean>(SKIP_SHELL_ASKED)) return;
+    const terminalCfg = vscode.workspace.getConfiguration("terminal.integrated");
+    const skip = terminalCfg.get<string[]>("commandsToSkipShell", []);
+    if (skip.includes("agentHub.focusNextWaiting")) return;
+    await context.globalState.update(SKIP_SHELL_ASKED, true);
+    const choice = await vscode.window.showInformationMessage(
+      "Agent Hub: let the 'next waiting session' shortcut work while a terminal has focus? This adds it to terminal.integrated.commandsToSkipShell.",
+      "Allow",
+      "Not now"
+    );
+    if (choice === "Allow") {
+      await terminalCfg.update("commandsToSkipShell", [...skip, "agentHub.focusNextWaiting"], vscode.ConfigurationTarget.Global);
+    }
+  };
+
+  // Always announce: VS Code cannot tell whether a terminal is actually focused or visible
+  // (activeTerminal is only the last one used), and a missed question costs more than a toast.
   const announceWaiting = async (s: Session) => {
     if (!getConfig().notifyWhenWaiting) return;
-    const terminal = launcher.terminalFor(s);
-    if (vscode.window.state.focused && terminal && vscode.window.activeTerminal === terminal) return;
     const where = rootOf(s)?.name ?? s.cwd;
     const choice = await vscode.window.showWarningMessage(`${where}: ${s.lastMessage || "waiting for you"}`, "Show");
     const current = tracker.get(s.id);
     if (choice && current) await openSession(current);
+  };
+
+  const OFFER_SAVE = "agentHub.offerSaveWorkspace";
+  let offeringSave = false;
+  const offerSaveWorkspace = async () => {
+    if (offeringSave || !context.globalState.get<boolean>(OFFER_SAVE)) return;
+    if (vscode.workspace.workspaceFile?.scheme === "file") {
+      await context.globalState.update(OFFER_SAVE, undefined); // already saved
+      return;
+    }
+    if (!vscode.workspace.workspaceFile) return; // folders not applied yet; the restarted host will ask
+    offeringSave = true;
+    try {
+      await context.globalState.update(OFFER_SAVE, undefined);
+      const choice = await vscode.window.showInformationMessage(
+        "Agent Hub: all roots are open in this window. Save the workspace so it opens like this next time.",
+        "Save Workspace As…"
+      );
+      if (choice) await vscode.commands.executeCommand("workbench.action.saveWorkspaceAs");
+    } finally {
+      offeringSave = false;
+    }
   };
 
   // Resolve the root from a tree node, a webview message, or by asking.
@@ -183,6 +225,9 @@ export function activate(context: vscode.ExtensionContext): void {
       const open = new Set((vscode.workspace.workspaceFolders ?? []).map((f) => normalizePath(f.uri.fsPath)));
       const missing = tree.getRoots().filter((r) => !open.has(r.id));
       if (missing.length) {
+        // Entering a multi-root workspace restarts the extension host, so the save offer
+        // is remembered and made by whichever activation runs next (this one or the new one).
+        if (vscode.workspace.workspaceFile?.scheme !== "file") await context.globalState.update(OFFER_SAVE, true);
         const start = vscode.workspace.workspaceFolders?.length ?? 0;
         const ok = vscode.workspace.updateWorkspaceFolders(start, 0, ...missing.map((r) => ({ uri: vscode.Uri.file(r.path), name: r.name })));
         if (!ok) {
@@ -190,18 +235,14 @@ export function activate(context: vscode.ExtensionContext): void {
           return;
         }
       }
-      if (vscode.workspace.workspaceFile?.scheme === "file") {
-        if (!missing.length) void vscode.window.showInformationMessage("Agent Hub: all roots are already open in this window.");
-        return;
-      }
-      const choice = await vscode.window.showInformationMessage(
-        `Agent Hub: ${missing.length} root(s) added. Save the workspace so this window opens with all roots next time.`,
-        "Save Workspace As…"
-      );
-      if (choice) await vscode.commands.executeCommand("workbench.action.saveWorkspaceAs");
+      if (!missing.length) void vscode.window.showInformationMessage("Agent Hub: all roots are already open in this window.");
+      await offerSaveWorkspace();
     }),
 
-    vscode.workspace.onDidChangeWorkspaceFolders(() => tree.reload()),
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      tree.reload();
+      void offerSaveWorkspace();
+    }),
     vscode.workspace.onDidChangeConfiguration((e) => {
       if (!e.affectsConfiguration("agentHub")) return;
       if (e.affectsConfiguration("agentHub.spoolPath") || e.affectsConfiguration("agentHub.claudeHome")) tracker.start();
@@ -216,6 +257,8 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push({ dispose: () => clearInterval(tick) });
 
   updateBadge();
+
+  void offerSaveWorkspace();
 
   if (!hooksInstalled(context)) {
     void vscode.window
