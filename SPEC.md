@@ -130,9 +130,17 @@ das Angebot „Save Workspace As…“ wird deshalb in `globalState` gemerkt und
   Sessions: das einzige offene Nicht-Hub-Terminal, dessen Name „claude“ enthält, mit cwd = Session-cwd;
   mehrdeutig → keins. Hub-Terminals matchen nie per cwd (nach `/exit` sind sie nur noch eine Shell).
 - Resume einer Session, die noch in einem Hub-Terminal läuft, fokussiert dieses statt sie doppelt zu starten.
-- `launchMode: chat`: ruft `agentHub.chatCommandId` der Anthropic-Extension auf; wenn leer oder
-  Fehler → Terminal-Fallback mit Hinweis. Status-Tracking funktioniert für Chat-Sessions
-  identisch, weil Hooks und Transkripte dieselben sind.
+- Chat (Anthropic-Extension, `agentHub.chatCommandId`, Default `claude-vscode.editor.open`): ohne
+  Argument öffnet der Befehl einen neuen Chat-Tab, mit Session-ID holt er deren offenen Tab nach vorn
+  oder setzt sie im Chat fort. Der Chat läuft **immer im ersten Ordner des Fensters** und bekommt nie
+  `env`/`envFile` eines Roots. Der Hub nutzt ihn deshalb nur für den Root, der erster Ordner ist und
+  kein eigenes env hat (`chatBlocker()` in `src/chatTarget.ts`); alle anderen Roots laufen im Terminal,
+  der Grund wird pro Root einmal angezeigt. Damit wird:
+  - mit `launchMode: chat` eine neue Session als Chat-Tab gestartet,
+  - eine Session aus dem Chat (Transkript-`entrypoint: claude-vscode`) im Chat fortgesetzt, ebenso
+    jede Session im Chat-Modus,
+  - ein Klick auf eine laufende Chat-Session deren Tab nach vorn geholt.
+  Status-Tracking ist für Chat-Sessions identisch, weil Hooks und Transkripte dieselben sind.
 
 ## Hooks
 
@@ -192,6 +200,11 @@ Der Hook schreibt dafür die *Namen* der Payload-Felder mit (`keys`), keine Inha
 4. **Chat-Command-IDs**: `cat ~/.vscode/extensions/anthropic.claude-code-*/package.json | jq
    '.contributes.commands'` → passende ID in `agentHub.chatCommandId`; prüfen, ob cwd/Resume-ID
    übergeben werden können.
+   ✅ Geprüft am 2026-10-10 an anthropic.claude-code 2.1.296 (Quellcode der Extension):
+   `claude-vscode.editor.open(sessionId?, prompt?, viewColumn?, …)`. Eine Session-ID wird übergeben,
+   ein cwd nicht: Das cwd ist `workspaceFolders[0]`. Chat-Sessions tragen im Transkript
+   `entrypoint: "claude-vscode"`, Terminal-Sessions `"cli"`. Bei einem Update der Extension erneut
+   prüfen (Signatur und `entrypoint`-Wert).
 5. **Windows**: Pfad-Quoting im Hook-Command (`node "C:\…\hub-event.js"`) und `fs.watch` auf
    NTFS; Polling-Fallback ist aktiv.
    ✅ Quoting funktioniert: Der Spool füllt sich unter Windows 11 aus Sessions in mehreren Roots.

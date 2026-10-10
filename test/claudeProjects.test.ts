@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { compact, encodeProjectDir, listTranscripts, readTranscriptTitle, transcriptBelongsTo, WrittenFilesIndex } from "../src/claudeProjects";
+import { compact, encodeProjectDir, listTranscripts, readTranscriptSummary, readTranscriptTitle, transcriptBelongsTo, WrittenFilesIndex } from "../src/claudeProjects";
 import { tmpDir } from "./helpers";
 
 function writeTranscript(home: string, cwd: string, id: string, lines: object[], mtime?: Date): string {
@@ -164,4 +164,14 @@ test("WrittenFilesIndex reads appended lines only, waits for a complete line, an
   fs.writeFileSync(p, write("z.md", "2026-10-08T12:00:00Z") + "\n");
   assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["z.md"]);
   assert.deepEqual(index.get(path.join(dir, "missing.jsonl")), []);
+});
+
+test("readTranscriptSummary reports where the session was started", () => {
+  const home = tmpDir();
+  const chat = writeTranscript(home, "/r", "chat", [{ ...user("hi"), entrypoint: "claude-vscode" }]);
+  const cli = writeTranscript(home, "/r", "cli", [{ type: "queue-operation" }, { ...user("hi"), entrypoint: "cli" }]);
+  assert.equal(readTranscriptSummary(chat).entrypoint, "claude-vscode");
+  assert.equal(readTranscriptSummary(cli).entrypoint, "cli");
+  assert.deepEqual(readTranscriptSummary(path.join(home, "missing.jsonl")), {});
+  assert.equal(listTranscripts(home, "/r", 5).find((t) => t.sessionId === "chat")?.entrypoint, "claude-vscode");
 });

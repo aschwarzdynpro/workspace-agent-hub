@@ -2,6 +2,7 @@ import * as fs from "fs";
 import * as os from "os";
 import * as path from "path";
 import * as vscode from "vscode";
+import { CHAT_ENTRYPOINT } from "./chatTarget";
 import { listTranscripts, WrittenFile, WrittenFilesIndex } from "./claudeProjects";
 import { getConfig, getRoots, normalizePath } from "./config";
 import { excludedNames, listDir } from "./dirListing";
@@ -37,6 +38,7 @@ export interface TranscriptNode {
   title: string;
   modifiedAt: number;
   transcriptPath: string;
+  entrypoint?: string;
 }
 export interface FileNode {
   kind: "file";
@@ -117,7 +119,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
       if (node.root.kind !== "coordinator") {
         const recent = this.recentTranscripts(node.root).filter((t) => !liveIds.has(t.sessionId));
         for (const t of recent.slice(0, live.length ? 2 : 3)) {
-          children.push({ kind: "transcript", root: node.root, sessionId: t.sessionId, title: t.title, modifiedAt: t.modifiedAt, transcriptPath: t.path });
+          children.push({ kind: "transcript", root: node.root, sessionId: t.sessionId, title: t.title, modifiedAt: t.modifiedAt, transcriptPath: t.path, entrypoint: t.entrypoint });
         }
       }
       if (!children.length) children.push({ kind: "detail", text: "No sessions yet — click + to start one", icon: "info" });
@@ -243,7 +245,7 @@ export class WorkspaceTree implements vscode.TreeDataProvider<Node> {
     item.contextValue = `session-${s.status}`;
     item.iconPath = statusIcon(s.status);
     item.tooltip = new vscode.MarkdownString(
-      [`**${s.title || s.id}**`, "", `Status: ${s.status}`, `cwd: \`${s.cwd}\``, s.lastMessage ? `\n> ${s.lastMessage}` : ""].join("\n")
+      [`**${s.title || s.id}**`, "", `Status: ${s.status}`, `Runs in: ${s.entrypoint === CHAT_ENTRYPOINT ? "Claude Code chat" : "terminal"}`, `cwd:\`${s.cwd}\``, s.lastMessage ? `\n> ${s.lastMessage}` : ""].join("\n")
     );
     item.command = { command: "agentHub.focusSession", title: "Open", arguments: [{ kind: "session", root, session: s }] };
     return item;

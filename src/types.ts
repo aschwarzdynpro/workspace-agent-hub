@@ -47,6 +47,8 @@ export interface Session {
   transcriptPath?: string;
   /** Number of prompts submitted in this session (turns). */
   turns: number;
+  /** From the transcript: `claude-vscode` for the chat panel, `cli` for a terminal, … */
+  entrypoint?: string;
 }
 
 /** One NDJSON line written by hooks/hub-event.js */
@@ -79,4 +81,5 @@ export interface TranscriptInfo {
   title: string;
   modifiedAt: number;
   sizeBytes: number;
+  entrypoint?: string;
 }

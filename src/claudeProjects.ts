@@ -26,6 +26,8 @@ interface TranscriptLine {
   customTitle?: string;
   aiTitle?: string;
   isMeta?: boolean;
+  /** Where the session was started: `claude-vscode` (chat panel), `cli`, `sdk-cli`, … */
+  entrypoint?: string;
   timestamp?: string;
   message?: { role?: string; content?: unknown };
 }
@@ -56,6 +58,7 @@ export function listTranscripts(claudeHome: string, cwd: string, limit = 20): Tr
       cwd: info.cwd ?? cwd,
       path: p,
       title: info.title ?? "(no prompt yet)",
+      entrypoint: info.entrypoint,
       modifiedAt: st.mtimeMs,
       sizeBytes: st.size,
     });
@@ -64,10 +67,15 @@ export function listTranscripts(claudeHome: string, cwd: string, limit = 20): Tr
 }
 
 export function readTranscriptTitle(transcriptPath: string): string | undefined {
+  return readTranscriptSummary(transcriptPath).title;
+}
+
+/** Title and entrypoint of a transcript; empty when it cannot be read (yet). */
+export function readTranscriptSummary(transcriptPath: string): TranscriptSummary {
   try {
-    return summarizeTranscript(transcriptPath, fs.statSync(transcriptPath).size).title;
+    return summarizeTranscript(transcriptPath, fs.statSync(transcriptPath).size);
   } catch {
-    return undefined;
+    return {};
   }
 }
 
@@ -104,6 +112,13 @@ interface TitleScan {
   summary?: string;
   prompt?: string;
   cwd?: string;
+  entrypoint?: string;
+}
+
+export interface TranscriptSummary {
+  title?: string;
+  cwd?: string;
+  entrypoint?: string;
 }
 
 /**
@@ -111,14 +126,14 @@ interface TitleScan {
  * first real prompt. Both title records are appended again when they change, so the last one wins
  * and the tail of the file is scanned as well.
  */
-function summarizeTranscript(file: string, size: number): { title?: string; cwd?: string } {
+function summarizeTranscript(file: string, size: number): TranscriptSummary {
   const scan: TitleScan = {};
   scanLines(readRange(file, 0, TITLE_SCAN_BYTES), scan);
   if (size > TITLE_SCAN_BYTES) scanLines(readRange(file, Math.max(TITLE_SCAN_BYTES, size - TITLE_SCAN_BYTES), TITLE_SCAN_BYTES), scan);
   return toSummary(scan);
 }
 
-function summarizeHead(head: string): { title?: string; cwd?: string } {
+function summarizeHead(head: string): TranscriptSummary {
   const scan: TitleScan = {};
   scanLines(head, scan);
   return toSummary(scan);
@@ -134,6 +149,7 @@ function scanLines(text: string, scan: TitleScan): void {
       continue; // line cut off at either end of the scanned range
     }
     if (!scan.cwd && line.cwd) scan.cwd = line.cwd;
+    if (!scan.entrypoint && line.entrypoint) scan.entrypoint = line.entrypoint;
     if (line.type === "custom-title" && line.customTitle) scan.customTitle = line.customTitle;
     if (line.type === "ai-title" && line.aiTitle) scan.aiTitle = line.aiTitle;
     if (!scan.summary && line.type === "summary" && line.summary) scan.summary = line.summary;
@@ -144,9 +160,9 @@ function scanLines(text: string, scan: TitleScan): void {
   }
 }
 
-function toSummary(scan: TitleScan): { title?: string; cwd?: string } {
+function toSummary(scan: TitleScan): TranscriptSummary {
   const title = scan.customTitle ?? scan.aiTitle ?? scan.summary ?? scan.prompt;
-  return { title: title ? compact(title) : undefined, cwd: scan.cwd };
+  return { title: title ? compact(title) : undefined, cwd: scan.cwd, entrypoint: scan.entrypoint };
 }
 
 /**

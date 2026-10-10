@@ -305,3 +305,12 @@ test("sortByAttention puts roots with waiting sessions first, then working, then
   assert.deepEqual(h.tracker.sortByAttention(roots).map((r) => r.name), ["d", "c", "a", "b"]);
   assert.equal(h.tracker.attentionRank(id(B)), 4);
 });
+
+test("the session's entrypoint (chat panel or terminal) comes from its transcript", () => {
+  const dir = tmpDir();
+  const transcript = path.join(dir, "s.jsonl");
+  fs.writeFileSync(transcript, JSON.stringify({ type: "user", cwd: A, entrypoint: "claude-vscode", message: { role: "user", content: "hi" } }) + "\n");
+  const h = harness([A]);
+  h.emit({ event: "SessionStart", session_id: "s", transcript_path: transcript });
+  assert.equal(h.tracker.get("s")?.entrypoint, "claude-vscode");
+});

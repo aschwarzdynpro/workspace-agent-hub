@@ -25,7 +25,7 @@ export function getConfig(): HubConfig {
     launchMode: c.get<"terminal" | "chat">("launchMode", "terminal"),
     claudeCommand: c.get<string>("claudeCommand", "claude"),
     extraArgs: c.get<string[]>("extraArgs", []),
-    chatCommandId: c.get<string>("chatCommandId", ""),
+    chatCommandId: c.get<string>("chatCommandId", "claude-vscode.editor.open"),
     spoolPath: expandHome(c.get<string>("spoolPath", "~/.claude/hub/events.ndjson")),
     claudeHome: expandHome(c.get<string>("claudeHome", "~/.claude")),
     staleAfterMs: Math.max(1, c.get<number>("staleAfterMinutes", 30)) * 60_000,

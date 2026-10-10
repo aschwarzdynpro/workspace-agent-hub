@@ -1,7 +1,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import { StringDecoder } from "string_decoder";
-import { compact, readTranscriptTitle } from "./claudeProjects";
+import { compact, readTranscriptSummary } from "./claudeProjects";
 import { Emitter } from "./emitter";
 import { normalizePath } from "./paths";
 import { Root, Session, SessionStatus, SpoolEvent } from "./types";
@@ -384,13 +384,16 @@ export class SessionTracker {
 
   /**
    * `refresh` re-reads an existing title: Claude Code writes its ai-title after a turn and a
-   * `/rename` at any time, so the transcript beats the prompt we saw in the hook.
+   * `/rename` at any time, so the transcript beats the prompt we saw in the hook. The entrypoint
+   * (chat panel or terminal) comes from the same read.
    */
   private loadTitle(s: Session, refresh = false): void {
     if (!s.transcriptPath) return;
     if (!refresh && (s.title || this.titleTried.has(s.id))) return;
     this.titleTried.add(s.id);
-    s.title = readTranscriptTitle(s.transcriptPath) ?? s.title;
+    const t = readTranscriptSummary(s.transcriptPath);
+    s.title = t.title ?? s.title;
+    s.entrypoint = t.entrypoint ?? s.entrypoint;
   }
 
   private prune(): void {

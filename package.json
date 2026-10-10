@@ -335,8 +335,8 @@
             "chat"
           ],
           "enumDescriptions": [
-            "Spawn `claude` in an integrated terminal whose cwd is the root (default, fully supported).",
-            "Open the Anthropic Claude Code chat panel for the root (requires `agentHub.chatCommandId`)."
+            "Open a terminal running `claude` in the root.",
+            "Open a Claude Code chat tab, but only for the root that is this window's first folder and has no `env`/`envFile` (the chat always runs in the first folder and gets no root env). Other roots use a terminal."
           ],
           "default": "terminal",
           "description": "How new sessions are started."
@@ -356,8 +356,8 @@
         },
         "agentHub.chatCommandId": {
           "type": "string",
-          "default": "",
-          "markdownDescription": "Command id of the Anthropic Claude Code extension used to open a chat session. Leave empty until verified from that extension's `package.json` (see `SPEC.md`)."
+          "default": "claude-vscode.editor.open",
+          "markdownDescription": "Command of the Anthropic Claude Code extension that opens a chat tab: called without arguments for a new conversation and with a session id to reveal or resume it. Verified for `claude-vscode.editor.open` (extension 2.1.296); empty disables the chat."
         },
         "agentHub.spoolPath": {
           "type": "string",

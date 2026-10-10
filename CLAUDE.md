@@ -54,7 +54,7 @@ and makes no API calls. All intelligence stays in Claude Code; the extension is 
 1. [x] Scaffold: package.json contributions, tree, launcher, hooks, overview, status bar
 2. [ ] Verify on a real machine: run *Agent Hub: Diagnose* (covers encoding, payload fields, `Notification` types, terminal revival) → fix `SPEC.md`
 3. [x] Terminal ↔ session mapping robustness (`AGENT_HUB_TERMINAL` env is the primary key; fall back to cwd)
-4. [ ] Chat mode: read command ids from the installed `anthropic.claude-code` extension and wire `agentHub.chatCommandId`
+4. [x] Chat mode: read command ids from the installed `anthropic.claude-code` extension and wire `agentHub.chatCommandId`
 5. [x] "Answer" action: focus terminal and, if the session waits for permission, show the pending question in the tree
 6. [ ] Coordinator root: generated `CLAUDE.md` that reads the spool via a tiny MCP server or `cat` and nothing else
 7. [ ] Context usage per session from transcript token counts (last `usage` block of the JSONL)

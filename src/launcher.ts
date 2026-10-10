@@ -1,5 +1,6 @@
 import { randomUUID } from "crypto";
 import * as vscode from "vscode";
+import { CHAT_ENTRYPOINT, CHAT_EXTENSION_ID, chatBlocker } from "./chatTarget";
 import { getConfig, normalizePath } from "./config";
 import { resolveRootEnv } from "./rootEnv";
 import { SessionTracker } from "./sessionTracker";
@@ -12,6 +13,8 @@ import { Root, Session } from "./types";
 export class Launcher implements vscode.Disposable {
   private readonly terminals = new Map<string, vscode.Terminal>(); // terminalId → terminal
   private readonly subs: vscode.Disposable[] = [];
+  /** Roots whose "why not in the chat" was already shown in this window. */
+  private readonly chatExplained = new Set<string>();
 
   constructor(private readonly tracker: SessionTracker, private readonly log: vscode.OutputChannel) {
     // Terminals survive a window reload (persistent sessions) but this map does not:
@@ -34,29 +37,31 @@ export class Launcher implements vscode.Disposable {
   }
 
   async newSession(root: Root): Promise<void> {
-    const cfg = getConfig();
-    if (cfg.launchMode === "chat") {
-      if (await this.openChat(root)) return;
-      void vscode.window.showWarningMessage(
-        "Agent Hub: chat launch not configured (agentHub.chatCommandId). Falling back to terminal."
-      );
-    }
+    if (getConfig().launchMode === "chat" && (await this.openChat(root))) return;
     await this.spawn(root, []);
   }
 
-  async resume(root: Root, sessionId: string): Promise<void> {
-    // Never run the same session twice: if it is still open in a hub terminal, go there.
+  /**
+   * A session started in the chat panel resumes there, as does any session in chat mode,
+   * when the chat may run this root; otherwise in a hub terminal.
+   */
+  async resume(root: Root, sessionId: string, entrypoint?: string): Promise<void> {
+    // Never run the same session twice: if it is still open here, go there.
     const live = this.tracker.get(sessionId);
-    if (live && live.status !== "ended" && this.focus(live)) return;
+    if (live && live.status !== "ended" && (await this.focus(root, live))) return;
+    const fromChat = (entrypoint ?? live?.entrypoint) === CHAT_ENTRYPOINT;
+    if ((fromChat || getConfig().launchMode === "chat") && (await this.openChat(root, sessionId))) return;
     await this.spawn(root, ["--resume", sessionId]);
   }
 
-  /** Bring the terminal of a running session to the front. */
-  focus(session: Session): boolean {
+  /** Bring a running session to the front: its terminal, or its chat tab when that is safe. */
+  async focus(root: Root | undefined, session: Session): Promise<boolean> {
     const t = this.terminalFor(session);
-    if (!t) return false;
-    t.show(false);
-    return true;
+    if (t) {
+      t.show(false);
+      return true;
+    }
+    return session.entrypoint === CHAT_ENTRYPOINT && root !== undefined && this.openChat(root, session.id);
   }
 
   /**
@@ -127,21 +132,33 @@ export class Launcher implements vscode.Disposable {
   }
 
   /**
-   * Chat mode: delegate to the Anthropic Claude Code extension.
-   * The command id is deliberately a setting: it has to be read from that
-   * extension's package.json (see SPEC.md → "Open questions") and may change.
+   * Opens (no id) or reveals/resumes (id) a chat tab of the Anthropic Claude Code extension,
+   * but only where the chat runs in this root (see chatTarget.ts). Returns false otherwise, after
+   * telling the user once per root why the terminal is used instead.
    */
-  private async openChat(root: Root): Promise<boolean> {
+  private async openChat(root: Root, sessionId?: string): Promise<boolean> {
     const cfg = getConfig();
-    if (!cfg.chatCommandId) return false;
+    const first = vscode.workspace.workspaceFolders?.find((f) => f.uri.scheme === "file");
+    const blocker = chatBlocker({
+      commandId: cfg.chatCommandId,
+      extensionInstalled: vscode.extensions.getExtension(CHAT_EXTENSION_ID) !== undefined,
+      firstFolder: first && { id: normalizePath(first.uri.fsPath), name: first.name },
+      root,
+    });
+    if (blocker) {
+      this.log.appendLine(`[${root.name}] not in the chat: ${blocker}`);
+      if (!this.chatExplained.has(root.id)) {
+        this.chatExplained.add(root.id);
+        void vscode.window.showInformationMessage(`Agent Hub: ${root.name} uses a terminal, because ${blocker}.`);
+      }
+      return false;
+    }
     try {
-      // Focus a file inside the root first so the extension picks that workspace folder.
-      const folder = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(root.path));
-      if (folder) await vscode.commands.executeCommand("workbench.view.explorer");
-      await vscode.commands.executeCommand(cfg.chatCommandId);
+      await vscode.commands.executeCommand(cfg.chatCommandId, sessionId);
       return true;
     } catch (e) {
-      this.log.appendLine(`chat launch failed: ${String(e)}`);
+      this.log.appendLine(`[${root.name}] chat launch failed: ${String(e)}`);
+      void vscode.window.showWarningMessage(`Agent Hub: could not open the Claude Code chat (${cfg.chatCommandId}); using a terminal.`);
       return false;
     }
   }

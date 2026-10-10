@@ -1,6 +1,7 @@
 import * as path from "path";
 import * as vscode from "vscode";
 import { listTranscripts } from "./claudeProjects";
+import { CHAT_ENTRYPOINT } from "./chatTarget";
 import { addRootToSettings, getConfig, normalizePath } from "./config";
 import { ConnectionTree } from "./connectionTree";
 import { buildDiagnostics } from "./diagnostics";
@@ -154,8 +155,8 @@ export function activate(context: vscode.ExtensionContext): void {
     }),
 
     vscode.commands.registerCommand("agentHub.resumeSession", async (node?: Node) => {
-      if (node?.kind === "transcript") return launcher.resume(node.root, node.sessionId);
-      if (node?.kind === "session") return launcher.resume(node.root, node.session.id);
+      if (node?.kind === "transcript") return launcher.resume(node.root, node.sessionId, node.entrypoint);
+      if (node?.kind === "session") return launcher.resume(node.root, node.session.id, node.session.entrypoint);
       const root = await pickRoot(node);
       if (!root) return;
       const items = listTranscripts(getConfig().claudeHome, root.path, 30).map((t) => ({
@@ -163,25 +164,25 @@ export function activate(context: vscode.ExtensionContext): void {
         description: relTime(t.modifiedAt),
         detail: t.sessionId,
         id: t.sessionId,
+        entrypoint: t.entrypoint,
       }));
       if (!items.length) {
         void vscode.window.showInformationMessage(`No transcripts found for ${root.name}.`);
         return;
       }
       const pick = await vscode.window.showQuickPick(items, { placeHolder: `Resume a session in ${root.name}`, matchOnDetail: true });
-      if (pick) await launcher.resume(root, pick.id);
+      if (pick) await launcher.resume(root, pick.id, pick.entrypoint);
     }),
 
     vscode.commands.registerCommand("agentHub.focusSession", async (node?: Node) => {
       if (node?.kind !== "session") return;
-      if (launcher.focus(node.session)) return;
-      // Not in a terminal of this window (external terminal, chat panel): offer resume.
+      if (await launcher.focus(node.root, node.session)) return;
+      // Not reachable from this window (external terminal, or a chat this window cannot run
+      // in the session's root): offer resume.
       const question = node.session.status === "waiting" && node.session.lastMessage ? ` It asks: "${node.session.lastMessage}"` : "";
       const actions = node.root ? ["Resume in new terminal", "Open transcript"] : ["Open transcript"];
-      const choice = await vscode.window.showInformationMessage(
-        `Session "${node.session.title || node.session.id}" is not attached to a terminal in this window.${question}`,
-        ...actions
-      );
+      const where = node.session.entrypoint === CHAT_ENTRYPOINT ? "runs in a Claude Code chat this window cannot open for its root" : "is not attached to a terminal in this window";
+      const choice = await vscode.window.showInformationMessage(`Session "${node.session.title || node.session.id}" ${where}.${question}`, ...actions);
       if (choice === "Resume in new terminal") await launcher.resume(node.root, node.session.id);
       if (choice === "Open transcript") await vscode.commands.executeCommand("agentHub.openTranscript", node);
     }),
