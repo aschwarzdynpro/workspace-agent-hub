@@ -79,7 +79,10 @@ Die `AGENT_HUB_*`-Variablen werden immer zuletzt gesetzt und können nicht über
 - `launchMode: terminal` (Default): `vscode.window.createTerminal({ cwd: root.path, env })`,
   dann `claude [extraArgs] [--resume <id>]`. Die Env-Variablen `AGENT_HUB_TERMINAL` (UUID) und
   `AGENT_HUB_ROOT` werden vom Hook-Skript in jedes Event geschrieben → eindeutige Zuordnung
-  Terminal ↔ Session, unabhängig von cwd-Wechseln.
+  Terminal ↔ Session, unabhängig von cwd-Wechseln. Nach einem Reload liest der Launcher die ID aus
+  `creationOptions.env` der wiederhergestellten Terminals. Fallback ohne ID: das einzige freie
+  Claude-Terminal (Hub-Terminal oder Name enthält „claude“) mit cwd = Session-cwd; mehrdeutig → keins.
+- Resume einer Session, die noch in einem Hub-Terminal läuft, fokussiert dieses statt sie doppelt zu starten.
 - `launchMode: chat`: ruft `agentHub.chatCommandId` der Anthropic-Extension auf; wenn leer oder
   Fehler → Terminal-Fallback mit Hinweis. Status-Tracking funktioniert für Chat-Sessions
   identisch, weil Hooks und Transkripte dieselben sind.
@@ -131,4 +134,8 @@ Sessions lesen Hooks erst nach Neustart.
    übergeben werden können.
 5. **Windows**: Pfad-Quoting im Hook-Command (`node "C:\…\hub-event.js"`) und `fs.watch` auf
    NTFS; Polling-Fallback ist aktiv.
-6. **Kontextverbrauch**: aus dem letzten `usage`-Block im Transkript ableitbar (Roadmap 7).
+6. **Terminal-Wiederherstellung**: Behalten von VS Code nach einem Reload wiederbelebte Terminals
+   `creationOptions.env.AGENT_HUB_TERMINAL`? Und zeigt `Terminal.name` für ein von Hand gestartetes
+   `claude` „claude“ (Fallback-Zuordnung über cwd)? Prüfen: Hub-Session starten, Fenster neu laden,
+   Session im Tree anklicken → muss das alte Terminal fokussieren.
+7. **Kontextverbrauch**: aus dem letzten `usage`-Block im Transkript ableitbar (Roadmap 7).
