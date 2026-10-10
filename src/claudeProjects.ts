@@ -23,11 +23,17 @@ interface TranscriptLine {
   cwd?: string;
   sessionId?: string;
   summary?: string;
+  customTitle?: string;
+  aiTitle?: string;
+  isMeta?: boolean;
   timestamp?: string;
   message?: { role?: string; content?: unknown };
 }
 
-/** List transcripts for a root (most recent first). Cheap: reads only the head of each file. */
+/** Bytes read from each end of a transcript; title records sit near the start or are appended. */
+const TITLE_SCAN_BYTES = 64 * 1024;
+
+/** List transcripts for a root (most recent first). Cheap: reads only the head and tail of each file. */
 export function listTranscripts(claudeHome: string, cwd: string, limit = 20): TranscriptInfo[] {
   const dir = projectDirFor(claudeHome, cwd);
   if (!fs.existsSync(dir)) return [];
@@ -44,8 +50,7 @@ export function listTranscripts(claudeHome: string, cwd: string, limit = 20): Tr
 
   const out: TranscriptInfo[] = [];
   for (const { p, f, st } of files) {
-    const head = readHead(p, 64 * 1024);
-    const info = summarizeHead(head);
+    const info = summarizeTranscript(p, st.size);
     out.push({
       sessionId: f.replace(/\.jsonl$/, ""),
       cwd: info.cwd ?? cwd,
@@ -60,7 +65,7 @@ export function listTranscripts(claudeHome: string, cwd: string, limit = 20): Tr
 
 export function readTranscriptTitle(transcriptPath: string): string | undefined {
   try {
-    return summarizeHead(readHead(transcriptPath, 64 * 1024)).title;
+    return summarizeTranscript(transcriptPath, fs.statSync(transcriptPath).size).title;
   } catch {
     return undefined;
   }
@@ -86,52 +91,84 @@ export function transcriptBelongsTo(transcriptPath: string, rootPath: string): b
 }
 
 function readHead(file: string, bytes: number): string {
+  return readRange(file, 0, bytes);
+}
+
+function readRange(file: string, start: number, bytes: number): string {
   const fd = fs.openSync(file, "r");
   try {
     const buf = Buffer.alloc(bytes);
-    const n = fs.readSync(fd, buf, 0, bytes, 0);
+    const n = fs.readSync(fd, buf, 0, bytes, start);
     return buf.subarray(0, n).toString("utf8");
   } finally {
     fs.closeSync(fd);
   }
 }
 
+interface TitleScan {
+  customTitle?: string;
+  aiTitle?: string;
+  summary?: string;
+  prompt?: string;
+  cwd?: string;
+}
+
+/**
+ * Title precedence: `/rename` (custom-title) > Claude Code's generated ai-title > summary >
+ * first real prompt. Both title records are appended again when they change, so the last one wins
+ * and the tail of the file is scanned as well.
+ */
+function summarizeTranscript(file: string, size: number): { title?: string; cwd?: string } {
+  const scan: TitleScan = {};
+  scanLines(readRange(file, 0, TITLE_SCAN_BYTES), scan);
+  if (size > TITLE_SCAN_BYTES) scanLines(readRange(file, Math.max(TITLE_SCAN_BYTES, size - TITLE_SCAN_BYTES), TITLE_SCAN_BYTES), scan);
+  return toSummary(scan);
+}
+
 function summarizeHead(head: string): { title?: string; cwd?: string } {
-  // A summary line anywhere in the head beats the first prompt, so a prompt alone does not stop the scan.
-  let summary: string | undefined;
-  let prompt: string | undefined;
-  let cwd: string | undefined;
-  for (const raw of head.split("\n")) {
+  const scan: TitleScan = {};
+  scanLines(head, scan);
+  return toSummary(scan);
+}
+
+function scanLines(text: string, scan: TitleScan): void {
+  for (const raw of text.split("\n")) {
     if (!raw.trim()) continue;
     let line: TranscriptLine;
     try {
       line = JSON.parse(raw) as TranscriptLine;
     } catch {
-      continue; // truncated last line
+      continue; // line cut off at either end of the scanned range
     }
-    if (!cwd && line.cwd) cwd = line.cwd;
-    if (!summary && line.type === "summary" && line.summary) summary = line.summary;
-    if (!prompt && line.type === "user" && line.message?.role === "user") {
-      const text = extractText(line.message.content);
-      if (text && !text.startsWith("<")) prompt = text;
+    if (!scan.cwd && line.cwd) scan.cwd = line.cwd;
+    if (line.type === "custom-title" && line.customTitle) scan.customTitle = line.customTitle;
+    if (line.type === "ai-title" && line.aiTitle) scan.aiTitle = line.aiTitle;
+    if (!scan.summary && line.type === "summary" && line.summary) scan.summary = line.summary;
+    // isMeta marks text Claude Code injects as a user message (skill bodies, reminders).
+    if (!scan.prompt && line.type === "user" && line.message?.role === "user" && !line.isMeta) {
+      scan.prompt = extractPrompt(line.message.content);
     }
-    if (summary && cwd) break;
   }
-  const title = summary ?? prompt;
-  return { title: title ? compact(title) : undefined, cwd };
 }
 
-function extractText(content: unknown): string | undefined {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (part && typeof part === "object" && (part as { type?: string }).type === "text") {
-        const t = (part as { text?: string }).text;
-        if (t) return t;
-      }
-    }
-  }
-  return undefined;
+function toSummary(scan: TitleScan): { title?: string; cwd?: string } {
+  const title = scan.customTitle ?? scan.aiTitle ?? scan.summary ?? scan.prompt;
+  return { title: title ? compact(title) : undefined, cwd: scan.cwd };
+}
+
+/**
+ * First text the user actually typed. Text starting with "<" is injected by Claude Code or
+ * an integration (command caveats, `<browser_instruction>`, `<ide_selection>`) and can come
+ * as an earlier part of the same message as the prompt.
+ */
+function extractPrompt(content: unknown): string | undefined {
+  const parts = typeof content === "string" ? [content] : Array.isArray(content) ? content.map(partText) : [];
+  return parts.find((t): t is string => !!t?.trim() && !t.trimStart().startsWith("<"));
+}
+
+function partText(part: unknown): string | undefined {
+  if (!part || typeof part !== "object" || (part as { type?: string }).type !== "text") return undefined;
+  return (part as { text?: string }).text;
 }
 
 export function compact(s: string, max = 80): string {

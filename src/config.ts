@@ -80,10 +80,22 @@ export function getRoots(): Root[] {
   return [...out.values()].sort((a, b) => a.name.localeCompare(b.name));
 }
 
-export async function addRootToSettings(root: RootSetting & { name: string }): Promise<void> {
+/**
+ * Appends a root to `agentHub.roots`. Writes to the workspace value when one exists —
+ * a global entry would be shadowed by it and never show up.
+ */
+export async function addRootToSettings(root: RootSetting & { name: string }): Promise<"added" | "exists"> {
   const c = vscode.workspace.getConfiguration("agentHub");
-  const current = c.get<RootSetting[]>("roots", []);
   const abs = path.resolve(expandHome(root.path));
-  if (current.some((r) => normalizePath(r.path) === normalizePath(abs))) return;
-  await c.update("roots", [...current, { ...root, path: abs }], vscode.ConfigurationTarget.Global);
+  const id = normalizePath(abs);
+  if (getRoots().some((r) => r.id === id)) return "exists";
+  const info = c.inspect<RootSetting[]>("roots");
+  const inWorkspace = info?.workspaceValue !== undefined;
+  const current = (inWorkspace ? info?.workspaceValue : info?.globalValue) ?? [];
+  await c.update(
+    "roots",
+    [...current, { ...root, path: abs }],
+    inWorkspace ? vscode.ConfigurationTarget.Workspace : vscode.ConfigurationTarget.Global
+  );
+  return "added";
 }

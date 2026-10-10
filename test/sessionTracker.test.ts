@@ -168,6 +168,23 @@ test("transcript title is used when no prompt was seen", () => {
   assert.equal(h.tracker.get("s")?.title, "Refactor the importer");
 });
 
+test("Stop re-reads the transcript title, so /rename and the AI title replace the prompt", () => {
+  const dir = tmpDir();
+  const transcript = path.join(dir, "s.jsonl");
+  fs.writeFileSync(transcript, "");
+  const h = harness([A]);
+  h.emit({ event: "SessionStart", session_id: "s", transcript_path: transcript });
+  h.emit({ event: "UserPromptSubmit", session_id: "s", prompt: "Gibt es Neuigkeiten?" });
+  assert.equal(h.tracker.get("s")?.title, "Gibt es Neuigkeiten?");
+  fs.appendFileSync(transcript, JSON.stringify({ type: "ai-title", aiTitle: "Ticket-Neuigkeiten", sessionId: "s" }) + "\n");
+  h.emit({ event: "Stop", session_id: "s" });
+  assert.equal(h.tracker.get("s")?.title, "Ticket-Neuigkeiten");
+  fs.appendFileSync(transcript, JSON.stringify({ type: "custom-title", customTitle: "ITGDYN-364", sessionId: "s" }) + "\n");
+  h.emit({ event: "UserPromptSubmit", session_id: "s", prompt: "weiter" });
+  h.emit({ event: "Stop", session_id: "s" });
+  assert.equal(h.tracker.get("s")?.title, "ITGDYN-364");
+});
+
 test("onDidStartWaiting fires once per transition into waiting, with waitingSince", () => {
   const h = harness([A]);
   const fired: string[] = [];

@@ -283,7 +283,7 @@ export class SessionTracker {
         s.currentTool = undefined;
         s.currentToolHint = undefined;
         s.lastMessage = undefined;
-        if (ev.prompt && (!s.title || s.turns === 1)) s.title = compact(ev.prompt);
+        if (ev.prompt && !s.title) s.title = compact(ev.prompt);
         break;
       case "PreToolUse":
         s.status = "working";
@@ -310,6 +310,7 @@ export class SessionTracker {
           s.status = "done";
           s.currentTool = undefined;
           s.currentToolHint = undefined;
+          if (!this.replaying) this.loadTitle(s, true);
         }
         break;
       case "SessionEnd":
@@ -362,10 +363,15 @@ export class SessionTracker {
     }
   }
 
-  private loadTitle(s: Session): void {
-    if (s.title || !s.transcriptPath || this.titleTried.has(s.id)) return;
+  /**
+   * `refresh` re-reads an existing title: Claude Code writes its ai-title after a turn and a
+   * `/rename` at any time, so the transcript beats the prompt we saw in the hook.
+   */
+  private loadTitle(s: Session, refresh = false): void {
+    if (!s.transcriptPath) return;
+    if (!refresh && (s.title || this.titleTried.has(s.id))) return;
     this.titleTried.add(s.id);
-    s.title = readTranscriptTitle(s.transcriptPath) ?? "";
+    s.title = readTranscriptTitle(s.transcriptPath) ?? s.title;
   }
 
   private prune(): void {
