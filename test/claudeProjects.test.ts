@@ -36,6 +36,17 @@ test("title: skips command/caveat messages starting with '<' and reads text part
   assert.equal(readTranscriptTitle(p), "Add tests please");
 });
 
+test("title: skips injected '<…>' text parts before the prompt in the same message", () => {
+  const home = tmpDir();
+  const p = writeTranscript(home, "/r", "a", [
+    user([
+      { type: "text", text: "<browser_instruction># Claude in Chrome</browser_instruction>" },
+      { type: "text", text: "wi-analyse ITGDYN-364" },
+    ]),
+  ]);
+  assert.equal(readTranscriptTitle(p), "wi-analyse ITGDYN-364");
+});
+
 test("title of a missing file is undefined, not an exception", () => {
   assert.equal(readTranscriptTitle(path.join(tmpDir(), "nope.jsonl")), undefined);
 });

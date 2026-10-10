@@ -111,27 +111,26 @@ function summarizeHead(head: string): { title?: string; cwd?: string } {
     }
     if (!cwd && line.cwd) cwd = line.cwd;
     if (!summary && line.type === "summary" && line.summary) summary = line.summary;
-    if (!prompt && line.type === "user" && line.message?.role === "user") {
-      const text = extractText(line.message.content);
-      if (text && !text.startsWith("<")) prompt = text;
-    }
+    if (!prompt && line.type === "user" && line.message?.role === "user") prompt = extractPrompt(line.message.content);
     if (summary && cwd) break;
   }
   const title = summary ?? prompt;
   return { title: title ? compact(title) : undefined, cwd };
 }
 
-function extractText(content: unknown): string | undefined {
-  if (typeof content === "string") return content;
-  if (Array.isArray(content)) {
-    for (const part of content) {
-      if (part && typeof part === "object" && (part as { type?: string }).type === "text") {
-        const t = (part as { text?: string }).text;
-        if (t) return t;
-      }
-    }
-  }
-  return undefined;
+/**
+ * First text the user actually typed. Text starting with "<" is injected by Claude Code or
+ * an integration (command caveats, `<browser_instruction>`, `<ide_selection>`) and can come
+ * as an earlier part of the same message as the prompt.
+ */
+function extractPrompt(content: unknown): string | undefined {
+  const parts = typeof content === "string" ? [content] : Array.isArray(content) ? content.map(partText) : [];
+  return parts.find((t): t is string => !!t?.trim() && !t.trimStart().startsWith("<"));
+}
+
+function partText(part: unknown): string | undefined {
+  if (!part || typeof part !== "object" || (part as { type?: string }).type !== "text") return undefined;
+  return (part as { text?: string }).text;
 }
 
 export function compact(s: string, max = 80): string {
