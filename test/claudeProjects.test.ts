@@ -2,7 +2,7 @@ import * as assert from "node:assert/strict";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { test } from "node:test";
-import { compact, encodeProjectDir, listTranscripts, readTranscriptTitle, transcriptBelongsTo } from "../src/claudeProjects";
+import { compact, encodeProjectDir, listTranscripts, readTranscriptTitle, transcriptBelongsTo, WrittenFilesIndex } from "../src/claudeProjects";
 import { tmpDir } from "./helpers";
 
 function writeTranscript(home: string, cwd: string, id: string, lines: object[], mtime?: Date): string {
@@ -106,4 +106,62 @@ test("transcriptBelongsTo compares the recorded cwd", () => {
 test("compact collapses whitespace and truncates with an ellipsis", () => {
   assert.equal(compact("a  b\n c"), "a b c");
   assert.equal(compact("x".repeat(100), 10), "xxxxxxxxx…");
+});
+
+const toolUse = (cwd: string, timestamp: string, ...uses: [string, Record<string, unknown>][]) => ({
+  type: "assistant",
+  cwd,
+  timestamp,
+  message: { role: "assistant", content: [{ type: "text", text: "ok" }, ...uses.map(([name, input]) => ({ type: "tool_use", id: "t", name, input }))] },
+});
+
+test("WrittenFilesIndex lists Write/Edit/NotebookEdit targets newest first, relative paths resolved", () => {
+  const dir = tmpDir();
+  const cwd = path.join(dir, "root");
+  const p = path.join(dir, "s.jsonl");
+  fs.writeFileSync(
+    p,
+    [
+      user("go", cwd),
+      toolUse(cwd, "2026-10-08T09:00:00Z", ["Write", { file_path: path.join(cwd, "out", "a.md"), content: "x" }], ["Read", { file_path: path.join(cwd, "r.md") }]),
+      toolUse(cwd, "2026-10-08T10:00:00Z", ["Edit", { file_path: "wi/b.md", old_string: "", new_string: "" }]),
+      toolUse(cwd, "2026-10-08T11:00:00Z", ["NotebookEdit", { notebook_path: path.join(cwd, "n.ipynb") }], ["Bash", { command: "echo > c.md" }]),
+    ]
+      .map((l) => JSON.stringify(l))
+      .join("\n") + "\n"
+  );
+  const files = new WrittenFilesIndex().get(p);
+  assert.deepEqual(
+    files.map((f) => [f.tool, f.path]),
+    [
+      ["NotebookEdit", path.join(cwd, "n.ipynb")],
+      ["Edit", path.join(cwd, "wi", "b.md")],
+      ["Write", path.join(cwd, "out", "a.md")],
+    ]
+  );
+});
+
+test("WrittenFilesIndex reads appended lines only, waits for a complete line, and restarts on truncation", () => {
+  const dir = tmpDir();
+  const cwd = path.join(dir, "root");
+  const p = path.join(dir, "s.jsonl");
+  const write = (file: string, ts: string) => JSON.stringify(toolUse(cwd, ts, ["Write", { file_path: path.join(cwd, file) }]));
+  const index = new WrittenFilesIndex();
+  fs.writeFileSync(p, write("a.md", "2026-10-08T09:00:00Z") + "\n");
+  assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["a.md"]);
+  // a line still being written (no newline yet, cut inside "Ä") is not read
+  const next = write("Ä.md", "2026-10-08T10:00:00Z");
+  const bytes = Buffer.from(next + "\n");
+  const cut = bytes.indexOf(Buffer.from("Ä")) + 1;
+  fs.appendFileSync(p, bytes.subarray(0, cut));
+  assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["a.md"]);
+  fs.appendFileSync(p, bytes.subarray(cut));
+  assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["Ä.md", "a.md"]);
+  // writing a.md again moves it to the top
+  fs.appendFileSync(p, write("a.md", "2026-10-08T11:00:00Z") + "\n");
+  assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["a.md", "Ä.md"]);
+  // a rewritten (shorter) transcript is indexed from scratch
+  fs.writeFileSync(p, write("z.md", "2026-10-08T12:00:00Z") + "\n");
+  assert.deepEqual(index.get(p).map((f) => path.basename(f.path)), ["z.md"]);
+  assert.deepEqual(index.get(path.join(dir, "missing.jsonl")), []);
 });

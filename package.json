@@ -131,6 +131,24 @@
         "title": "Diagnose (check Claude Code assumptions)",
         "category": "Agent Hub",
         "icon": "$(pulse)"
+      },
+      {
+        "command": "agentHub.openFile",
+        "title": "Open File",
+        "category": "Agent Hub",
+        "icon": "$(file)"
+      },
+      {
+        "command": "agentHub.openFileSource",
+        "title": "Open Markdown Source",
+        "category": "Agent Hub",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "command": "agentHub.revealFile",
+        "title": "Reveal File",
+        "category": "Agent Hub",
+        "icon": "$(folder-opened)"
       }
     ],
     "menus": {
@@ -206,6 +224,21 @@
           "command": "agentHub.openTranscript",
           "when": "view == agentHub.workspaces && viewItem =~ /^session/",
           "group": "2_nav"
+        },
+        {
+          "command": "agentHub.openFileSource",
+          "when": "view == agentHub.workspaces && viewItem == file-md",
+          "group": "inline@1"
+        },
+        {
+          "command": "agentHub.openFileSource",
+          "when": "view == agentHub.workspaces && viewItem == file-md",
+          "group": "1_open"
+        },
+        {
+          "command": "agentHub.revealFile",
+          "when": "view == agentHub.workspaces && viewItem =~ /^file/",
+          "group": "2_nav"
         }
       ],
       "commandPalette": [
@@ -219,6 +252,18 @@
         },
         {
           "command": "agentHub.revealRoot",
+          "when": "false"
+        },
+        {
+          "command": "agentHub.openFile",
+          "when": "false"
+        },
+        {
+          "command": "agentHub.openFileSource",
+          "when": "false"
+        },
+        {
+          "command": "agentHub.revealFile",
           "when": "false"
         }
       ]
@@ -333,6 +378,19 @@
           "type": "boolean",
           "default": true,
           "description": "Show a notification when a session starts waiting for you (permission or question). Skipped while you are already looking at that session's terminal."
+        },
+        "agentHub.openMarkdownAs": {
+          "type": "string",
+          "enum": [
+            "preview",
+            "editor"
+          ],
+          "default": "preview",
+          "enumDescriptions": [
+            "Rendered Markdown preview tab",
+            "Text editor tab"
+          ],
+          "description": "How a Markdown file written by a session opens when you click it in the Agent Hub tree. The inline button always opens the source."
         }
       }
     },

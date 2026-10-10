@@ -32,7 +32,17 @@ Nicht-Ziele (Stufe 1): eigenes Chat-UI, eigener Agent-Loop, API-Aufrufe, Fork vo
   3 sessions"), darunter die laufenden Sessions (Titel = erster Prompt oder Transcript-Summary,
   Status-Icon, Beschreibung „working · Edit"), darunter Details (offene Frage, aktuelles Tool,
   Turns/Zeit). Pro Root zusätzlich die letzten Transkripte als „Resume"-Einträge.
+- Dateien einer Session: unter jeder Session und jedem Resume-Eintrag die Dateien, die sie per
+  `Write`/`Edit`/`MultiEdit`/`NotebookEdit` angelegt oder geändert hat. Die Liste kommt aus dem
+  Transkript, das inkrementell gelesen wird (nur neu angehängte, vollständige Zeilen). Dateien im Root
+  stehen zuerst, dann solche außerhalb (Memory, Pläne), jeweils neueste zuerst, höchstens 15.
+  Gelöschte Dateien und Hilfsdateien im Temp-Verzeichnis (Scratchpad) werden ausgeblendet; per Bash
+  geschriebene Dateien sieht der Hub nicht. Ein Klick öffnet die Datei als festen Tab, Markdown als
+  gerenderte Vorschau (`agentHub.openMarkdownAs`); die Inline-Aktion öffnet den Quelltext.
+- Resume-Einträge klappen per Klick auf und zeigen ihre Dateien; Resume ist die Inline-Aktion.
 - Inline-Aktionen: Root → New Session, Resume; Session → Terminal öffnen, Transkript öffnen.
+- „Reveal Root" / „Reveal File": im Explorer, wenn der Ordner im Fenster ist, sonst im Datei-Explorer
+  des Betriebssystems.
 - View „Connection": Hooks installiert?, Spool-Alter, Transkript-Verzeichnis, Launch-Mode.
 - Welcome-Content ohne Roots: „Add Root", „Install Hooks".
 - Badge am View-Container = Anzahl Sessions im Status `waiting`.
@@ -151,6 +161,7 @@ Sessions lesen Hooks erst nach Neustart.
 | `agentHub.claudeHome` | `~/.claude` | Claude-Home |
 | `agentHub.staleAfterMinutes` | `30` | Idle-Schwelle |
 | `agentHub.notifyWhenWaiting` | `true` | Benachrichtigung, wenn eine Session auf dich wartet |
+| `agentHub.openMarkdownAs` | `"preview"` | Klick auf eine geschriebene Markdown-Datei: `preview` (gerendert) oder `editor` |
 
 ## Offene Punkte (auf dem echten Rechner verifizieren)
 

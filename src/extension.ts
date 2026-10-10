@@ -11,7 +11,7 @@ import { SessionTracker } from "./sessionTracker";
 import { StatusBar } from "./statusBar";
 import { Root, Session } from "./types";
 import { relTime } from "./format";
-import { Node, WorkspaceTree } from "./workspaceTree";
+import { isMarkdown, Node, WorkspaceTree } from "./workspaceTree";
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel("Agent Hub");
@@ -191,9 +191,32 @@ export function activate(context: vscode.ExtensionContext): void {
       await vscode.window.showTextDocument(vscode.Uri.file(node.session.transcriptPath), { preview: true });
     }),
 
+    // revealInExplorer does nothing for a folder outside this window, so fall back to the OS.
     vscode.commands.registerCommand("agentHub.revealRoot", async (node?: Node) => {
       if (node?.kind !== "root") return;
-      await vscode.commands.executeCommand("revealInExplorer", vscode.Uri.file(node.root.path));
+      const uri = vscode.Uri.file(node.root.path);
+      const inWindow = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
+      await vscode.commands.executeCommand(inWindow ? "revealInExplorer" : "revealFileInOS", uri);
+    }),
+
+    // Files a session wrote: a real tab (not the replaceable preview tab), Markdown rendered.
+    vscode.commands.registerCommand("agentHub.openFile", async (node?: Node) => {
+      if (node?.kind !== "file") return;
+      const uri = vscode.Uri.file(node.path);
+      if (isMarkdown(node.path) && getConfig().openMarkdownAs === "preview") {
+        await vscode.commands.executeCommand("markdown.showPreview", uri);
+      } else {
+        await vscode.window.showTextDocument(uri, { preview: false });
+      }
+    }),
+    vscode.commands.registerCommand("agentHub.openFileSource", async (node?: Node) => {
+      if (node?.kind === "file") await vscode.window.showTextDocument(vscode.Uri.file(node.path), { preview: false });
+    }),
+    vscode.commands.registerCommand("agentHub.revealFile", async (node?: Node) => {
+      if (node?.kind !== "file") return;
+      const uri = vscode.Uri.file(node.path);
+      const inWindow = vscode.workspace.getWorkspaceFolder(uri) !== undefined;
+      await vscode.commands.executeCommand(inWindow ? "revealInExplorer" : "revealFileInOS", uri);
     }),
 
     vscode.commands.registerCommand("agentHub.showOverview", () => OverviewPanel.show(context, tracker, () => tree.getRoots())),

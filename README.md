@@ -60,6 +60,9 @@ Run *Agent Hub: Open All Roots in This Window* once and save the workspace: from
 VS Code window holds every customer — Explorer, Git and Search across all roots, one Claude terminal
 per root, and each agent still sees only its own folder.
 
+Every session (live or in the resume list) expands to the files it wrote with Write/Edit. A click
+opens one as a tab, Markdown rendered; the inline button opens the source.
+
 ## How it works
 
 ```
